@@ -61,7 +61,7 @@ async def root():
     return {
         "name": setting.PROJECT_NAME,
         "version": setting.VERSION,
-        "environment": setting.ENVIRONMENT,
+        "environment": setting.MODE,
         "status": "healthy",
     }
 

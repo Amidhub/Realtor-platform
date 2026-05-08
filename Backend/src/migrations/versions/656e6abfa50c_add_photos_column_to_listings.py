@@ -1,8 +1,8 @@
-"""initial_migration
+"""add photos column to listings
 
-Revision ID: 0b2c32be9e2a
+Revision ID: 656e6abfa50c
 Revises: 
-Create Date: 2026-04-21 20:48:02.274450
+Create Date: 2026-05-07 19:22:58.797270
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0b2c32be9e2a'
+revision: str = '656e6abfa50c'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -41,6 +41,7 @@ def upgrade() -> None:
     sa.Column('area', sa.Integer(), nullable=False),
     sa.Column('address', sa.String(length=256), nullable=False),
     sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('photos', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text("TIMEZONE('utc', now())"), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text("TIMEZONE('utc', now())"), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),

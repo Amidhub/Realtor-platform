@@ -3,7 +3,7 @@ import enum
 from typing import Annotated
 
 from src.database import Base
-from sqlalchemy import text, ForeignKey, String
+from sqlalchemy import JSON, text, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -40,5 +40,6 @@ class Listing(Base):
     area: Mapped[int]
     address: Mapped[str256]
     status: Mapped[Status] = mapped_column(String(20), default="draft")
+    photos: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=True)
     created_at: Mapped[created_at]
     updated_at: Mapped[updated_at]
