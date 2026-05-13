@@ -1,17 +1,20 @@
 from fastapi import UploadFile
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
 from datetime import datetime
+
 class Listing_S(BaseModel):
     type: Literal['sale', 'rent'] = Field(description="Тип объявления")
     title: str = Field(min_length=5, max_length=200)
     description: str = Field(min_length=10, max_length=5000)
+
     price: int = Field(gt=0, le=1_000_000_000)
     rooms: int = Field(ge=0, le=20)
     area: float = Field(gt=0, le=5000)
     address: str = Field(min_length=5, max_length=300)
     status: Literal['draft', 'moderation', 'active', 'rejected'] = Field(default='draft')
     photos: List[str] = Field(default_factory=list, description="Список ключей фото в S3")
+
     
     class Config:
         json_schema_extra = {
@@ -58,3 +61,14 @@ class PaginationResponse_S(BaseModel):
     offset: int|None
     limit: int|None
     has_more: bool
+
+class ListingUpdate_S(BaseModel):
+    """Схема для обновления объявления (все поля опциональны)"""
+    type: Optional[Literal['sale', 'rent']] = Field(None, description="Тип объявления")
+    title: Optional[str] = Field(None, min_length=5, max_length=200)
+    description: Optional[str] = Field(None, min_length=10, max_length=5000)
+    price: Optional[int] = Field(None, gt=0)
+    rooms: Optional[int] = Field(None, ge=0, le=20)
+    area: Optional[int] = Field(None, gt=0, le=1000)
+    address: Optional[str] = Field(None, min_length=5, max_length=300)
+    status: Optional[Literal['draft', 'moderation', 'active', 'rejected']] = Field(None)

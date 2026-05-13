@@ -8,6 +8,7 @@ from src.database import engine
 
 from src.auth.router import router as auth_router
 from src.listings.router import router as listing_router
+from src.user.router import router as user_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,7 +51,7 @@ app.add_middleware(
 # Подключение роутеров
 app.include_router(auth_router)
 app.include_router(listing_router)
-
+app.include_router(user_router)
 
 # Корневой эндпоинт
 @app.get("/", tags=["health"])

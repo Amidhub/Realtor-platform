@@ -18,11 +18,11 @@ from src.s3.dependencise import get_s3_client
 from src.s3.utils import check_size_of_file, check_type_of_file
 from src.s3.client import S3Client
 
+from src.listings.schemas import ListingUpdate_S
 router = APIRouter(
     prefix="/listings",
     tags=["Объявления"]
 )
-
 
 @router.post("/add_listing")
 async def add_listing(
@@ -122,4 +122,184 @@ async def get_listing(
     
     return list_listings
 
-            
+@router.get("/show")
+async def show_user_listings(
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Показывает список объявлений текущего пользователя
+    """
+    listings_dao = ListingDAO(db)
+
+    # Получаем все объявления пользователя
+    listings = await listings_dao.get_all(
+        user_id = user.id
+    )
+
+    if not listings:
+        return {"message": "У вас пока нет объявлений", "listings": []}
+    
+    return {
+        "message": f"Найдено: {len(listings)} объявлений",
+        "listings": listings,
+        "count": len(listings)
+    }
+
+@router.get("/show/{listing_id}")
+async def show_single_listing(
+    listing_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    показывает конкретное объявление пользователя по id
+    """
+    listing_dao = ListingDAO(db)
+
+    listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
+
+    if not listing:
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "Объявление не найдено или не принадлежит вам"
+        )
+    
+    return {"listing": listing}
+
+@router.patch("/{listing_id}")
+async def partial_update_listing(
+    listing_id: int,
+    data: ListingUpdate_S,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """Частичное обновление объявления (только переданные поля)"""
+    listing_dao = ListingDAO(db)
+
+    listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
+
+    if not listing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Объявление не найдено или не принадлежит вам"
+        )
+    update_data = data.model_dump(exclude_none=True)
+
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нет данных для обновления"
+        )
+    await listing_dao.update(id=listing_id, **update_data)
+
+    updated_listing = await listing_dao.get_one_by_id(listing_id)
+
+    return {
+        "message": "Объявление успешно обновлено",
+        "listing": updated_listing
+    }
+
+@router.delete("/{listing_id}")
+async def delete_listing(
+    listing_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Удаляет объявление пользователя по id
+    """
+    listing_dao = ListingDAO(db)
+
+    listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
+
+    if not listing:
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "Объявление не найдено или не принадлежит вам"
+        )
+    await listing_dao.delete(id = listing_id)
+    return {
+        "message": "Объявление успешно удалено",
+        "deleted_listing_id": listing_id
+    }
+
+@router.get("/moderation")
+async def get_moderation_listings(
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Показывает список объявлений со статусом moderation
+    (Только для администраторов или модераторов)
+    """
+    if user.role not in ["admin", "moderator"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="У вас нет прав для просмотра объявлений на модерации"
+        )
+    
+    listing_dao = ListingDAO(db)
+
+    # Получаем все объявления со статусом "moderation"
+    listings = await listing_dao.get_all(status="moderation")
+
+    if not listings:
+        return {
+            "message": "Нет объявлений на модерации",
+            "listings": [],
+            "count": 0
+        }
+    
+    return {
+        "message": f"Найдено объявлений на модерации: {len(listings)}",
+        "listings": listings,
+        "count": len(listings)
+    }
+
+@router.patch("/moderation/{listing_id}/accept")
+async def approve_listing(
+    listing_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """Одобрить объявление (статус: moderation -> active)"""
+    if user.role != "moderator":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    listing_dao = ListingDAO(db)
+    listing = await listing_dao.get_one_or_none(id=listing_id)
+    
+    if not listing:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+    
+    if listing.status != "moderation":
+        raise HTTPException(status_code=400, detail="Объявление не на модерации")
+    
+    await listing_dao.update(id=listing_id, status="active")
+    
+    return {"message": "Объявление одобрено", "listing_id": listing_id}
+
+
+@router.patch("/moderation/{listing_id}/reject")
+async def reject_listing(
+    listing_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """Отклонить объявление (статус: moderation -> rejected)"""
+    if user.role != "moderator":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    listing_dao = ListingDAO(db)
+    listing = await listing_dao.get_one_or_none(id=listing_id)
+    
+    if not listing:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+    
+    if listing.status != "moderation":
+        raise HTTPException(status_code=400, detail="Объявление не на модерации")
+    
+    await listing_dao.update(id=listing_id, status="rejected")
+    
+    return {"message": "Объявление отклонено", "listing_id": listing_id}
