@@ -127,12 +127,7 @@ async def show_user_listings(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """
-    Показывает список объявлений текущего пользователя
-    """
     listings_dao = ListingDAO(db)
-
-    # Получаем все объявления пользователя
     listings = await listings_dao.get_all(
         user_id = user.id
     )
@@ -152,9 +147,6 @@ async def show_single_listing(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """
-    показывает конкретное объявление пользователя по id
-    """
     listing_dao = ListingDAO(db)
 
     listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
@@ -174,7 +166,6 @@ async def partial_update_listing(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """Частичное обновление объявления (только переданные поля)"""
     listing_dao = ListingDAO(db)
 
     listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
@@ -206,9 +197,6 @@ async def delete_listing(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """
-    Удаляет объявление пользователя по id
-    """
     listing_dao = ListingDAO(db)
 
     listing = await listing_dao.get_one_or_none(id = listing_id, user_id = user.id)
@@ -229,10 +217,6 @@ async def get_moderation_listings(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """
-    Показывает список объявлений со статусом moderation
-    (Только для администраторов или модераторов)
-    """
     if user.role not in ["admin", "moderator"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -240,8 +224,6 @@ async def get_moderation_listings(
         )
     
     listing_dao = ListingDAO(db)
-
-    # Получаем все объявления со статусом "moderation"
     listings = await listing_dao.get_all(status="moderation")
 
     if not listings:
@@ -263,7 +245,6 @@ async def approve_listing(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """Одобрить объявление (статус: moderation -> active)"""
     if user.role != "moderator":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     
@@ -287,7 +268,6 @@ async def reject_listing(
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
-    """Отклонить объявление (статус: moderation -> rejected)"""
     if user.role != "moderator":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     
