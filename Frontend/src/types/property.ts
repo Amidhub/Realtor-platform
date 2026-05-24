@@ -1,5 +1,5 @@
 // Типы объявления недвижимости.
-// Поля соответствуют backend-схеме Listing_S.
+// Поля соответствуют backend-схеме Listing_S и используются в каталоге.
 
 export type DealType = 'sale' | 'rent'
 
@@ -18,6 +18,6 @@ export type CreatePropertyRequest = {
 }
 
 export type Property = CreatePropertyRequest & {
-  id?: number
-  created_at?: string
+  id: number
+  created_at: string
 }

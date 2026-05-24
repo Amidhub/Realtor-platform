@@ -8,6 +8,7 @@ import { LoginPage } from '../pages/LoginPage/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage/RegisterPage'
 import { CreatePropertyPage } from '../pages/CreatePropertyPage/CreatePropertyPage'
 import { ProfilePage } from '../pages/ProfilePage/ProfilePage'
+import { CatalogPage } from '../pages/CatalogPage/CatalogPage'
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
       {
         path: 'profile',
         element: <ProfilePage />,
+      },
+      {
+        path: 'catalog',
+        element: <CatalogPage />,
       },
     ],
   },

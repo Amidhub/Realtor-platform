@@ -6,6 +6,7 @@ import { useAuth } from '../../app/AuthContext'
 
 const navLinks = [
   { to: '/', label: 'Главная' },
+  { to: '/catalog', label: 'Каталог' },
   { to: '/create-property', label: 'Создать объявление' },
   { to: '/profile', label: 'Личный кабинет' },
 ]
@@ -39,7 +40,7 @@ export function Header() {
         {isAuthenticated && user ? (
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-slate-600 sm:inline">
-                {user.email}
+              {user.email}
             </span>
 
             <button

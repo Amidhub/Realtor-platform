@@ -1,21 +1,23 @@
 // Страница входа пользователя.
-// Содержит форму авторизации с валидацией через React Hook Form и Zod.
+// Отправляет email/password на backend и показывает понятные ошибки авторизации.
 
+import axios from 'axios'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../app/AuthContext'
 import { loginSchema, type LoginFormValues } from './loginSchema'
 
 export function LoginPage() {
   const { login } = useAuth()
-  const [isSuccess, setIsSuccess] = useState(false)
+  const navigate = useNavigate()
+  const [authError, setAuthError] = useState('')
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    reset,
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -25,12 +27,24 @@ export function LoginPage() {
   })
 
   const onSubmit = async (data: LoginFormValues) => {
-    await login(data)
+    setAuthError('')
 
-    console.log('Данные входа:', data)
+    try {
+      await login(data)
+      navigate('/profile')
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 422) {
+          setAuthError('Проверьте корректность email и пароля.')
+          return
+        }
 
-    setIsSuccess(true)
-    reset()
+        setAuthError('Неверный email или пароль.')
+        return
+      }
+
+      setAuthError('Неверный email или пароль.')
+    }
   }
 
   return (
@@ -88,22 +102,20 @@ export function LoginPage() {
           )}
         </div>
 
+        {authError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-medium text-red-700">{authError}</p>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={isSubmitting}
           className="w-full rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          Войти
+          {isSubmitting ? 'Входим...' : 'Войти'}
         </button>
       </form>
-
-      {isSuccess && (
-        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm font-medium text-green-800">
-            Вы успешно вошли. Пользователь сохранён в состоянии приложения.
-          </p>
-        </div>
-      )}
     </section>
   )
 }
