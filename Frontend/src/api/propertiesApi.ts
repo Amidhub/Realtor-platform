@@ -1,6 +1,8 @@
 // API-функции для объявлений недвижимости.
-// Используются для создания объявления, загрузки фото и получения каталога с backend.
+// Используются для создания объявления, загрузки фото, получения каталога,
+// личного кабинета пользователя и модерации.
 
+import imageCompression from 'browser-image-compression'
 import { apiClient } from './axiosInstance'
 import type {
   CreatePropertyRequest,
@@ -33,6 +35,16 @@ type BackendListingsResponse = {
   has_more: boolean
 }
 
+type BackendUserListingsResponse = {
+  message?: string
+  listings: BackendListing[]
+}
+
+type BackendListingsData =
+  | BackendListing[]
+  | BackendListingsResponse
+  | BackendUserListingsResponse
+
 export type GetPropertiesParams = {
   offset?: number
   limit?: number
@@ -64,6 +76,18 @@ function getPhotoUrl(photo: string) {
   const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
   return `${apiUrl}/listings/photo/${photo}`
+}
+
+function extractBackendListings(data: BackendListingsData) {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if ('list_listings' in data) {
+    return data.list_listings
+  }
+
+  return data.listings
 }
 
 function mapBackendListingToProperty(listing: BackendListing): Property {
@@ -105,13 +129,87 @@ export async function createProperty(data: CreatePropertyRequest) {
 export async function uploadPropertyPhotos(listingId: number, photos: File[]) {
   const formData = new FormData()
 
-  photos.forEach((photo) => {
+  const compressedPhotos = await Promise.all(
+    photos.map((photo) => {
+      const maxOriginalSize = 1.5 * 1024 * 1024
+
+      if (photo.size <= maxOriginalSize) {
+        return photo
+      }
+
+      return imageCompression(photo, {
+        maxSizeMB: 1.2,
+        maxWidthOrHeight: 1800,
+        useWebWorker: true,
+      })
+    }),
+  )
+
+  compressedPhotos.forEach((photo) => {
     formData.append('uploaded_files', photo)
   })
 
   const response = await apiClient.post(
     `/listings/add_listing_photos/${listingId}`,
     formData,
+    {
+      timeout: 120000,
+    },
+  )
+
+  return response.data
+}
+
+export async function getMyProperties() {
+  const response = await apiClient.get<BackendListingsData>('/listings/show')
+
+  return extractBackendListings(response.data).map(mapBackendListingToProperty)
+}
+
+export async function getMyProperty(propertyId: number) {
+  const response = await apiClient.get<BackendListing>(
+    `/listings/show/${propertyId}`,
+  )
+
+  return mapBackendListingToProperty(response.data)
+}
+
+export async function updateProperty(
+  propertyId: number,
+  data: Partial<CreatePropertyRequest>,
+) {
+  const response = await apiClient.patch<BackendListing>(
+    `/listings/${propertyId}`,
+    data,
+  )
+
+  return mapBackendListingToProperty(response.data)
+}
+
+export async function deleteProperty(propertyId: number) {
+  const response = await apiClient.delete(`/listings/${propertyId}`)
+
+  return response.data
+}
+
+export async function getModerationProperties() {
+  const response =
+    await apiClient.get<BackendListingsData>('/listings/moderation')
+
+  return extractBackendListings(response.data).map(mapBackendListingToProperty)
+}
+
+export async function approveProperty(propertyId: number) {
+  const response = await apiClient.patch(
+    `/listings/moderation/${propertyId}/accept`,
+  )
+
+  return response.data
+}
+
+export async function rejectProperty(propertyId: number) {
+  const response = await apiClient.patch(
+    `/listings/moderation/${propertyId}/reject`,
   )
 
   return response.data

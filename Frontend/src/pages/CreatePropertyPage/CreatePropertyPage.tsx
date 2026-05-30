@@ -21,6 +21,7 @@ const MAX_PHOTOS_COUNT = 6
 export function CreatePropertyPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
+  const [photoError, setPhotoError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -64,25 +65,26 @@ export function CreatePropertyPage() {
     mutationFn: async (data: CreatePropertyFormValues) => {
       const createdProperty = await createProperty({
         ...data,
-        status: 'draft',
+        status: 'moderation',
         photos: [],
       })
-  
+
       if (selectedPhotos.length > 0) {
         if (!createdProperty.id) {
           throw new Error('Backend не вернул id созданного объявления')
         }
-  
+
         await uploadPropertyPhotos(createdProperty.id, selectedPhotos)
       }
-  
+
       return createdProperty
     },
-  
+
     onSuccess: () => {
       setIsSuccess(true)
       setSelectedPhotos([])
-  
+      setPhotoError('')
+
       reset({
         type: 'sale',
         title: '',
@@ -96,22 +98,35 @@ export function CreatePropertyPage() {
   })
 
   const addPhotos = (files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((file) =>
-      file.type.startsWith('image/'),
-    )
+    const newFiles = Array.from(files)
 
-    setSelectedPhotos((currentPhotos) => {
-      const availableSlots = MAX_PHOTOS_COUNT - currentPhotos.length
-      const photosToAdd = imageFiles.slice(0, availableSlots)
+    const imageFiles = newFiles.filter((file) => file.type.startsWith('image/'))
 
-      return [...currentPhotos, ...photosToAdd]
-    })
+    if (imageFiles.length === 0) {
+      setPhotoError('Можно загружать только изображения.')
+      return
+    }
+
+    if (imageFiles.length !== newFiles.length) {
+      setPhotoError('Некоторые файлы не были добавлены, потому что это не изображения.')
+      return
+    }
+
+    if (selectedPhotos.length + imageFiles.length > MAX_PHOTOS_COUNT) {
+      setPhotoError(`Можно загрузить максимум ${MAX_PHOTOS_COUNT} фото.`)
+      return
+    }
+
+    setSelectedPhotos((currentPhotos) => [...currentPhotos, ...imageFiles])
+    setPhotoError('')
   }
 
   const removePhoto = (photoIndex: number) => {
     setSelectedPhotos((currentPhotos) =>
       currentPhotos.filter((_, index) => index !== photoIndex),
     )
+
+    setPhotoError('')
   }
 
   const openFileDialog = () => {
@@ -147,7 +162,7 @@ export function CreatePropertyPage() {
   const onSubmit = (data: CreatePropertyFormValues) => {
     setIsSuccess(false)
     createPropertyMutation.reset()
-  
+
     createPropertyMutation.mutate(data)
   }
 
@@ -163,8 +178,8 @@ export function CreatePropertyPage() {
         </h1>
 
         <p className="mt-2 text-slate-600">
-          Заполните данные объекта недвижимости и добавьте фотографии. После создания
-          объявления фото будут загружены и появятся в каталоге.
+          Заполните данные объекта недвижимости и добавьте фотографии. После
+          создания объявление будет отправлено на модерацию.
         </p>
       </div>
 
@@ -376,6 +391,12 @@ export function CreatePropertyPage() {
             </button>
           </div>
 
+          {photoError && (
+            <p className="mt-2 text-sm font-medium text-red-600">
+              {photoError}
+            </p>
+          )}
+
           {photoPreviews.length > 0 && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {photoPreviews.map((preview, index) => (
@@ -426,8 +447,8 @@ export function CreatePropertyPage() {
           </h2>
 
           <p className="mt-2 text-sm text-green-700">
-            Если вы добавили фотографии, они загружены и будут отображаться в
-            каталоге.
+            Если вы добавили фотографии, они загружены. Объявление отправлено на
+            модерацию и появится в каталоге после одобрения.
           </p>
         </div>
       )}
@@ -435,8 +456,8 @@ export function CreatePropertyPage() {
       {createPropertyMutation.isError && (
         <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-sm font-medium text-red-700">
-            Не удалось создать объявление или загрузить фотографии. Проверьте данные и
-            попробуйте ещё раз.
+            Не удалось создать объявление или загрузить фотографии. Проверьте
+            данные и попробуйте ещё раз.
           </p>
         </div>
       )}

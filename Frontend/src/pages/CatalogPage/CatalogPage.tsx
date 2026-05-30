@@ -1,6 +1,7 @@
 // Страница каталога недвижимости.
 // Получает объявления с backend через /listings/filter_search.
 // Если backend недоступен, использует mock-данные как fallback.
+// В каталоге показываются только активные объявления.
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -141,10 +142,10 @@ export function CatalogPage() {
   const backendParams = useMemo(() => {
     const sortBy: 'price' | 'created_at' =
       sortOption === 'newest' ? 'created_at' : 'price'
-  
+
     const sortOrder: 'asc' | 'desc' =
       sortOption === 'priceAsc' ? 'asc' : 'desc'
-  
+
     return {
       offset: 0,
       limit: 100,
@@ -170,6 +171,7 @@ export function CatalogPage() {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
     return sourceProperties
+      .filter((property) => property.status === 'active')
       .filter((property) => {
         const matchesSearch = property.address
           .toLowerCase()
@@ -408,16 +410,16 @@ export function CatalogPage() {
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">
-            {propertiesQuery.isPending
-              ? 'Загрузка объектов...'
-              : (
-                  <>
-                    Найдено объектов:{' '}
-                    <span className="font-medium">
-                      {filteredProperties.length}
-                    </span>
-                  </>
-                )}
+            {propertiesQuery.isPending ? (
+              'Загрузка объектов...'
+            ) : (
+              <>
+                Найдено объектов:{' '}
+                <span className="font-medium">
+                  {filteredProperties.length}
+                </span>
+              </>
+            )}
           </p>
 
           <button

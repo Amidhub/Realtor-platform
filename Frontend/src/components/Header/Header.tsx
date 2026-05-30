@@ -4,15 +4,23 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../app/AuthContext'
 
-const navLinks = [
+const commonNavLinks = [
   { to: '/', label: 'Главная' },
   { to: '/catalog', label: 'Каталог' },
   { to: '/create-property', label: 'Создать объявление' },
   { to: '/profile', label: 'Личный кабинет' },
 ]
 
+const moderatorNavLink = { to: '/moderation', label: 'Модерация' }
+
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth()
+
+  const isModerator = isAuthenticated && user?.role === 'moderator'
+
+  const navLinks = isModerator
+    ? [...commonNavLinks, moderatorNavLink]
+    : commonNavLinks
 
   const getLinkClass = ({ isActive }: { isActive: boolean }) =>
     [

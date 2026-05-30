@@ -9,6 +9,7 @@ import { RegisterPage } from '../pages/RegisterPage/RegisterPage'
 import { CreatePropertyPage } from '../pages/CreatePropertyPage/CreatePropertyPage'
 import { ProfilePage } from '../pages/ProfilePage/ProfilePage'
 import { CatalogPage } from '../pages/CatalogPage/CatalogPage'
+import { ModerationPage } from '../pages/ModerationPage/ModerationPage'
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +39,10 @@ export const router = createBrowserRouter([
       {
         path: 'catalog',
         element: <CatalogPage />,
+      },
+      {
+        path: 'moderation',
+        element: <ModerationPage />,
       },
     ],
   },
