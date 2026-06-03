@@ -41,5 +41,21 @@ class Listing(Base):
     address: Mapped[str256]
     status: Mapped[Status] = mapped_column(String(20), default="draft")
     photos: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=True)
+    infrastructure: Mapped[list[int] | None] = mapped_column(JSON, default=list, nullable=True)
+    investment: Mapped[dict | None] = mapped_column(JSON, default=None, nullable=True)
     created_at: Mapped[created_at]
     updated_at: Mapped[updated_at]
+
+class ModerationLog(Base):
+    __tablename__ = "moderation_logs"
+    id: Mapped[intpk]
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id", ondelete="CASCADE"))
+    moderator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    previous_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    new_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[created_at]
+
+
+

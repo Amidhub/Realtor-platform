@@ -1,14 +1,13 @@
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from pydantic import Field
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile
-from src.listings.dao import ListingDAO
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, Body, status
+from src.listings.dao import ListingDAO, ModerationLogDAO
+from src.listings.schemas import FullListing_S, Listing_S, PaginationResponse_S, ModerationLog_S
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
 from src.auth.dependencise import get_current_user
-
-from src.listings.schemas import FullListing_S, Listing_S, PaginationResponse_S
 
 from src.user.model import User
 
@@ -249,6 +248,7 @@ async def approve_listing(
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     
     listing_dao = ListingDAO(db)
+    log_dao = ModerationLogDAO(db)
     listing = await listing_dao.get_one_or_none(id=listing_id)
     
     if not listing:
@@ -257,8 +257,18 @@ async def approve_listing(
     if listing.status != "moderation":
         raise HTTPException(status_code=400, detail="Объявление не на модерации")
     
+    previous_status = listing.status
+
     await listing_dao.update(id=listing_id, status="active")
     
+    await log_dao.add(
+        listing_id=listing_id,
+        moderator_id=user.id,
+        action="accept",
+        previous_status=previous_status,
+        new_status="active"
+    )
+
     return {"message": "Объявление одобрено", "listing_id": listing_id}
 
 
@@ -266,12 +276,14 @@ async def approve_listing(
 async def reject_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    reason: Optional[str] = Body(None, embed=True, max_length=500)
 ):
     if user.role != "moderator":
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     
     listing_dao = ListingDAO(db)
+    log_dao = ModerationLogDAO(db)
     listing = await listing_dao.get_one_or_none(id=listing_id)
     
     if not listing:
@@ -279,7 +291,67 @@ async def reject_listing(
     
     if listing.status != "moderation":
         raise HTTPException(status_code=400, detail="Объявление не на модерации")
-    
+    previous_status = listing.status
+
     await listing_dao.update(id=listing_id, status="rejected")
     
+    await log_dao.add(
+        listing_id=listing.id,
+        moderator_id=user.id,
+        action="reject",
+        previous_status=previous_status,
+        new_status="rejected",
+        reason=reason
+    )
+
     return {"message": "Объявление отклонено", "listing_id": listing_id}
+@router.get("/moderation/logs")
+async def get_moderation_logs(
+    listing_id: Optional[int] = None,
+
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    if user.role != "moderator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="У вас нет прав для просмотра логов модерации"
+        )
+    
+    log_dao = ModerationLogDAO(db)
+
+    filters = {}
+    if listing_id:
+        filters["listing_id"] = listing_id
+
+    logs = await log_dao.get_all(**filters)
+    logs = sorted(logs, key = lambda x: x.created_at, reverse=True)
+
+    return {
+        "logs": logs,
+        "count": len(logs)
+    }
+
+@router.get("/moderation/logs/moderator/{moderator_id}")
+async def get_moderator_logs(
+    moderator_id: int,
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    if user.role != "moderator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="У вас нет прав для просмотра логов модерации"
+        )
+    
+    log_dao = ModerationLogDAO(db)
+    logs = await log_dao.get_all(
+        moderator_id=moderator_id
+    )
+
+    return {
+        "moderator_id": moderator_id,
+        "logs": logs,
+        "count": len(logs)
+    }
+    

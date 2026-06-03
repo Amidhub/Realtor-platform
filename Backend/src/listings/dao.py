@@ -1,7 +1,7 @@
 from typing import List
 
 from src.dao.base import BaseRepository
-from src.listings.models import Listing
+from src.listings.models import Listing, ModerationLog
 from sqlalchemy import select, and_, func
 class ListingDAO(BaseRepository):
     model=Listing
@@ -67,3 +67,6 @@ class ListingDAO(BaseRepository):
             
         result = await self.session.execute(query)
         return result.scalars().all()
+class ModerationLogDAO(BaseRepository):
+    model = ModerationLog
+

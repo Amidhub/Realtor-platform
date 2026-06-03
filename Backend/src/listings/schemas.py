@@ -1,6 +1,6 @@
 from fastapi import UploadFile
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict, Any
 from datetime import datetime
 
 class Listing_S(BaseModel):
@@ -15,6 +15,22 @@ class Listing_S(BaseModel):
     status: Literal['draft', 'moderation', 'active', 'rejected'] = Field(default='draft')
     photos: List[str] = Field(default_factory=list, description="Список ключей фото в S3")
 
+    infrastructure: Optional[List[int]] = Field(
+        default_factory=list, 
+        description="Список ID объектов инфраструктуры (школы, парки, метро и т.д.)"
+    )
+
+    investment: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Информация об инвестициях: ROI, доходность, срок окупаемости и т.д.",
+        example={
+            "roi": 12.5,
+            "annual_yield": 8.2,
+            "payback_years": 5,
+            "min_investment": 1000000,
+            "risk_level": "medium"
+        }
+    )
     
     class Config:
         json_schema_extra = {
@@ -27,7 +43,14 @@ class Listing_S(BaseModel):
                 "area": 65,
                 "address": "ул. Пушкина, 10",
                 "status": "draft",
-                "photos": ["afsdf09sdf90sdf0", "9ds90vsd0vc0x99"]
+                "photos": ["afsdf09sdf90sdf0", "9ds90vsd0vc0x99"],
+                "infrastructure": [1, 2, 3, 5],
+                "investment": {
+                    "roi": 15.0,
+                    "annual_yield": 10.0,
+                    "payback_years": 7,
+                    "min_investment": 500000
+                }
             }
         }
         
@@ -50,6 +73,11 @@ class FullListing_S(Listing_S):
                 "area": 65.5,
                 "address": "ул. Пушкина, 10",
                 "status": "active",
+                "infrastructure": [1, 2, 3],
+                "investment": {
+                    "roi": 15.0,
+                    "annual_yield": 10.0
+                },
                 "created_at": "2024-01-15T10:30:00",
                 "updated_at": "2024-01-15T10:30:00"
             }
@@ -72,3 +100,18 @@ class ListingUpdate_S(BaseModel):
     area: Optional[int] = Field(None, gt=0, le=1000)
     address: Optional[str] = Field(None, min_length=5, max_length=300)
     status: Optional[Literal['draft', 'moderation', 'active', 'rejected']] = Field(None)
+    infrastructure: Optional[List[int]] = Field(None, description="Список ID объектов инфраструктуры")
+    investment: Optional[Dict[str, Any]] = Field(None, description="Информация об инвестициях")
+
+class ModerationLog_S(BaseModel):
+    id: int
+    listing_id: int
+    moderator_id: int
+    action: Literal['accept', 'reject']
+    previous_status: str
+    new_status: str
+    created_at: datetime
+    reason: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
