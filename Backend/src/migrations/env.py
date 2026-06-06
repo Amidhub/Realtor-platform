@@ -12,6 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.database import Base, DATABASE_URL
 from src.user.model import User
 from src.listings.models import Listing
+from src.translations.models import Translation
+from src.config import setting
+
+print(f"DB_USER: {setting.DB_USER}")
+print(f"DB_NAME: {setting.DB_NAME}")
+print(f"DATABASE_URL: {setting.DB_HOST}:{setting.DB_PORT}/{setting.DB_NAME}")
 
 config = context.config
 
@@ -34,6 +40,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+print(f"Connection URL: {config.get_main_option('sqlalchemy.url')}")
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),

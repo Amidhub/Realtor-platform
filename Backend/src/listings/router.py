@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Optional, Dict, Any
 from pydantic import Field
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, Body, status
@@ -18,6 +18,8 @@ from src.s3.utils import check_size_of_file, check_type_of_file
 from src.s3.client import S3Client
 
 from src.listings.schemas import ListingUpdate_S
+
+from src.geocoding.service import GeocodingService
 router = APIRouter(
     prefix="/listings",
     tags=["Объявления"]
@@ -30,7 +32,15 @@ async def add_listing(
     user: User = Depends(get_current_user),
 ):
     listing_dao = ListingDAO(db)
-    
+    geocoding_service = GeocodingService()
+
+    coordinates = await geocoding_service.geocode(data.address)
+
+    latitude = coordinates[0] if coordinates else None
+    longitude = coordinates[1] if coordinates else None
+
+    investment_dict = data.investment.model_dump() if data.investment else None
+
     listing = await listing_dao.add(
         user_id=user.id,
         type=data.type,
@@ -41,7 +51,11 @@ async def add_listing(
         area=data.area,
         address=data.address,
         status=data.status,
-        photos=[]
+        photos=[],
+        infrastructure=data.infrastructure or [],
+        investment=investment_dict,
+        latitude=latitude,
+        longitude=longitude
     )
     
     return {"id": listing.id, "message": "Объявление создано, теперь загрузите фото"}
@@ -63,7 +77,8 @@ async def add_listing_photos(
     if not uploaded_files:
         raise HTTPException(400, "Нет файлов")
     
-    photos = listing.photos.copy()
+    photos = listing.photos if listing.photos is not None else []
+    photos = photos.copy() if photos else []
     
     for uploaded_file in uploaded_files:
         check_size_of_file(uploaded_file)
@@ -100,6 +115,12 @@ async def filter_search(
     count_listings = await listing_dao.get_count(start_price, finish_price, rooms, type)
     list_listings = await listing_dao.get_all_by_filters_for_pagination(offset, limit, start_price, finish_price, rooms, type, sort_by, sort_order)
     
+
+    for listing in list_listings:
+        if listing.photos is None:
+            listing.photos = []
+
+
     has_more = offset + len(list_listings) < count_listings
     
     return PaginationResponse_S(
@@ -112,7 +133,7 @@ async def filter_search(
 
 @router.get("/get_listing")
 async def get_listing(
-                    listing_id: int = Query(0),
+                    listing_id: int = Query(..., description="ID объявления"),
                     db: AsyncSession = Depends(get_session),
                     user: User = Depends(get_current_user)) -> FullListing_S|None:
     listing_dao = ListingDAO(db)
@@ -130,6 +151,10 @@ async def show_user_listings(
     listings = await listings_dao.get_all(
         user_id = user.id
     )
+
+    for listing in listings:
+        if listing.photos is None:
+            listing.photos = []
 
     if not listings:
         return {"message": "У вас пока нет объявлений", "listings": []}
@@ -156,6 +181,9 @@ async def show_single_listing(
             detail = "Объявление не найдено или не принадлежит вам"
         )
     
+    if listing.photos is None:
+        listing.photos = []
+
     return {"listing": listing}
 
 @router.patch("/{listing_id}")
@@ -175,6 +203,21 @@ async def partial_update_listing(
             detail="Объявление не найдено или не принадлежит вам"
         )
     update_data = data.model_dump(exclude_none=True)
+
+    if "investment" in update_data and update_data["investment"]:
+        if hasattr(update_data["investment"], "model_dump"):
+            update_data["investment"] = update_data["investment"].model_dump()
+            
+    if "address" in update_data and update_data["address"] != listing.address:
+        geocoding_service = GeocodingService()
+        coordinates = await geocoding_service.geocode(update_data["address"])
+
+        if coordinates:
+            update_data["latitude"] = coordinates[0]
+            update_data["longitude"] = coordinates[1]
+        else:
+            update_data["latitude"] = None
+            update_data["longitude"] = None
 
     if not update_data:
         raise HTTPException(
@@ -354,4 +397,47 @@ async def get_moderator_logs(
         "logs": logs,
         "count": len(logs)
     }
+
+@router.get("/nearby")
+async def get_nearby_listings(
+    lat: float = Query(..., description="Широта центра"),
+    lon: float = Query(..., description="Долгота центра"),
+    radius_km: float = Query(5.0, ge=0.1, le=50, description="Радиус в км"),
+    db: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    import math
+    listing_dao = ListingDAO(db)
+
+    lat_delta = radius_km / 111.0
+    lon_delta = radius_km / (111.0 * math.cos(math.radians(lat)))
+
+    lat_min = lat - lat_delta
+    lat_max = lat + lat_delta
+    lon_min = lon - lon_delta
+    lon_max = lon + lon_delta
+
+    listings = await listing_dao.get_by_coordinates_bounds(lat_min, lat_max, lon_min, lon_max)
+
+    def distance(lat1, lon1, lat2, lon2):
+        R = 6371
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        return R * 2 * math.asin(math.sqrt(a))
     
+    for l in listings:
+        if l.latitude and l.longitude:
+            l.distance = distance(lat, lon, l.latitude, l.longitude)
+
+    listings_with_distance = [l for l in listings if hasattr(l, 'distance')]
+    listings_with_distance.sort(key=lambda x: x.distance)
+
+    return {
+        "center": {"lat": lat, "lon": lon},
+        "radius_km": radius_km,
+        "listings": listings_with_distance,
+        "count": len(listings_with_distance)
+    }

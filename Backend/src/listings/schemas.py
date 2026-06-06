@@ -3,6 +3,23 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional, Dict, Any
 from datetime import datetime
 
+class InvestmentInfo_S(BaseModel):
+    roi: Optional[float] = Field(None, ge=0, le=1000, description="ROI в процентах")
+    annual_yield: Optional[float] = Field(None, ge=0, le=1000, description="Годовая доходность в процентах")
+    payback_years: Optional[float] = Field(None, ge=0, le=1000, description="Срок окупаемости в годах")
+    min_investment: Optional[int] = Field(None, ge=0, description="Минимальная инвестиция")
+    risk_level: Optional[Literal['low', 'medium', 'high']] = Field(None, ge=0, description="Уровень риска")
+    class Config:
+        json_schema_exstra = {
+            "example": {
+                "roi": 15.5,
+                "annual_yield": 10.2,
+                "payback_years": 5.5,
+                "min_investment": 1000000,
+                "risk_level": "medium"
+            }
+        }
+
 class Listing_S(BaseModel):
     type: Literal['sale', 'rent'] = Field(description="Тип объявления")
     title: str = Field(min_length=5, max_length=200)
@@ -20,17 +37,13 @@ class Listing_S(BaseModel):
         description="Список ID объектов инфраструктуры (школы, парки, метро и т.д.)"
     )
 
-    investment: Optional[Dict[str, Any]] = Field(
+    investment: InvestmentInfo_S = Field(
         default=None,
-        description="Информация об инвестициях: ROI, доходность, срок окупаемости и т.д.",
-        example={
-            "roi": 12.5,
-            "annual_yield": 8.2,
-            "payback_years": 5,
-            "min_investment": 1000000,
-            "risk_level": "medium"
-        }
+        description="Информация об инвестициях"
     )
+
+    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Широта")
+    longitude: Optional[float] = Field(None, ge=-180, le=180, description="Долгота")
     
     class Config:
         json_schema_extra = {
@@ -60,6 +73,7 @@ class FullListing_S(Listing_S):
     created_at: datetime
     updated_at: datetime
     
+    photos: List[str] = Field(default_factory=list)
     class Config:
         json_schema_extra = {
             "example": {
@@ -73,6 +87,7 @@ class FullListing_S(Listing_S):
                 "area": 65.5,
                 "address": "ул. Пушкина, 10",
                 "status": "active",
+                "photos": [],
                 "infrastructure": [1, 2, 3],
                 "investment": {
                     "roi": 15.0,
@@ -91,7 +106,6 @@ class PaginationResponse_S(BaseModel):
     has_more: bool
 
 class ListingUpdate_S(BaseModel):
-    """Схема для обновления объявления (все поля опциональны)"""
     type: Optional[Literal['sale', 'rent']] = Field(None, description="Тип объявления")
     title: Optional[str] = Field(None, min_length=5, max_length=200)
     description: Optional[str] = Field(None, min_length=10, max_length=5000)
@@ -100,8 +114,27 @@ class ListingUpdate_S(BaseModel):
     area: Optional[int] = Field(None, gt=0, le=1000)
     address: Optional[str] = Field(None, min_length=5, max_length=300)
     status: Optional[Literal['draft', 'moderation', 'active', 'rejected']] = Field(None)
+    photos: Optional[List[str]] = Field(None, description="Список ключей фото в S3") 
     infrastructure: Optional[List[int]] = Field(None, description="Список ID объектов инфраструктуры")
-    investment: Optional[Dict[str, Any]] = Field(None, description="Информация об инвестициях")
+    investment: Optional[InvestmentInfo_S] = Field(None, description="Информация об инвестициях")
+    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Широта")
+    longitude: Optional[float] = Field(None, ge=-180, le=180, description="Долгота")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "title": "Новое название",
+                "price": 15000000,
+                "status": "moderation",
+                "photos": ["new_photo1.jpg", "new_photo2.jpg"],
+                "infrastructure": [1, 2, 3],
+                "investment": {
+                    "roi": 15.5,
+                    "annual_yield": 10.2
+                }
+            }
+        }
 
 class ModerationLog_S(BaseModel):
     id: int

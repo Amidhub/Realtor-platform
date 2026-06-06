@@ -40,11 +40,16 @@ class Listing(Base):
     area: Mapped[int]
     address: Mapped[str256]
     status: Mapped[Status] = mapped_column(String(20), default="draft")
-    photos: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=True)
+    photos: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     infrastructure: Mapped[list[int] | None] = mapped_column(JSON, default=list, nullable=True)
     investment: Mapped[dict | None] = mapped_column(JSON, default=None, nullable=True)
+
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)
+    
     created_at: Mapped[created_at]
     updated_at: Mapped[updated_at]
+
 
 class ModerationLog(Base):
     __tablename__ = "moderation_logs"

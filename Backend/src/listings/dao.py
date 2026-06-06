@@ -67,6 +67,22 @@ class ListingDAO(BaseRepository):
             
         result = await self.session.execute(query)
         return result.scalars().all()
+    
+    async def get_by_coordinates_bounds(
+        self,
+        lat_min: float,
+        lat_max: float,
+        lon_min: float,
+        lon_max: float
+    ) -> List[Listing]:
+        query = select(self.model).where(
+            self.model.latitude.between(lat_min, lat_max),
+            self.model.longitude.between(lon_min, lon_max),
+            self.model.status == "active"
+        )
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
 class ModerationLogDAO(BaseRepository):
     model = ModerationLog
 
