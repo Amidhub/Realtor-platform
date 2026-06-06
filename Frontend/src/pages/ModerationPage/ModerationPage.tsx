@@ -1,35 +1,31 @@
 // Модераторский кабинет.
-// Показывает объявления на модерации и позволяет редактировать, одобрять или отклонять их.
+// Показывает объявления на модерации, позволяет одобрять или отклонять их с причиной,
+// а также показывает историю действий модераторов.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../app/AuthContext'
 import {
   approveProperty,
+  getModerationLogs,
   getModerationProperties,
   rejectProperty,
-  updateProperty,
 } from '../../api/propertiesApi'
 import type { Property } from '../../types/property'
 
-type ModerationEditForm = {
-  title: string
-  description: string
-  price: number
-  address: string
-  rooms: number
-  area: number
-}
+function formatPrice(
+  price: number,
+  type: Property['type'],
+  locale: string,
+  perMonthLabel: string,
+) {
+  const formattedPrice = new Intl.NumberFormat(locale).format(price)
 
-function formatPrice(price: number, type: Property['type']) {
-  const formattedPrice = new Intl.NumberFormat('ru-RU').format(price)
-
-  return type === 'rent' ? `${formattedPrice} ₽/мес.` : `${formattedPrice} ₽`
-}
-
-function getDealTypeLabel(type: Property['type']) {
-  return type === 'sale' ? 'Продажа' : 'Аренда'
+  return type === 'rent'
+    ? `${formattedPrice} ₽/${perMonthLabel}`
+    : `${formattedPrice} ₽`
 }
 
 const fallbackPhoto =
@@ -39,7 +35,15 @@ function getPropertyPhotos(property: Property) {
   return property.photos.length > 0 ? property.photos : [fallbackPhoto]
 }
 
-function PropertyPhotoGallery({ property }: { property: Property }) {
+type PropertyPhotoGalleryProps = {
+  property: Property
+  selectPhotoLabel: string
+}
+
+function PropertyPhotoGallery({
+  property,
+  selectPhotoLabel,
+}: PropertyPhotoGalleryProps) {
   const photos = getPropertyPhotos(property)
   const [selectedPhoto, setSelectedPhoto] = useState(photos[0])
 
@@ -64,7 +68,7 @@ function PropertyPhotoGallery({ property }: { property: Property }) {
                   ? 'border-blue-600 ring-2 ring-blue-100'
                   : 'border-transparent hover:border-slate-300',
               ].join(' ')}
-              aria-label="Выбрать фото объявления"
+              aria-label={selectPhotoLabel}
             >
               <img src={photo} alt="" className="h-full w-full object-cover" />
             </button>
@@ -75,55 +79,56 @@ function PropertyPhotoGallery({ property }: { property: Property }) {
   )
 }
 
-function getEditFormFromProperty(property: Property): ModerationEditForm {
-  return {
-    title: property.title,
-    description: property.description,
-    price: property.price,
-    address: property.address,
-    rooms: property.rooms,
-    area: property.area,
-  }
+type ExpandableDescriptionProps = {
+  text: string
+  showFullLabel: string
+  hideFullLabel: string
 }
 
-function ExpandableDescription({ text }: { text: string }) {
-    const [isExpanded, setIsExpanded] = useState(false)
-    const shouldShowToggle = text.length > 120
-  
-    return (
-      <div className="mt-2">
-        <p
-          className={[
-            'whitespace-pre-line break-words text-sm text-slate-600 [overflow-wrap:anywhere]',
-            isExpanded ? '' : 'line-clamp-3',
-          ].join(' ')}
+function ExpandableDescription({
+  text,
+  showFullLabel,
+  hideFullLabel,
+}: ExpandableDescriptionProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const shouldShowToggle = text.length > 120
+
+  return (
+    <div className="mt-2">
+      <p
+        className={[
+          'whitespace-pre-line break-words text-sm text-slate-600 [overflow-wrap:anywhere]',
+          isExpanded ? '' : 'line-clamp-3',
+        ].join(' ')}
+      >
+        {text}
+      </p>
+
+      {shouldShowToggle && (
+        <button
+          type="button"
+          onClick={() => setIsExpanded((currentValue) => !currentValue)}
+          className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {text}
-        </p>
-  
-        {shouldShowToggle && (
-          <button
-            type="button"
-            onClick={() => setIsExpanded((currentValue) => !currentValue)}
-            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            {isExpanded ? 'Скрыть' : 'Показать полностью'}
-          </button>
-        )}
-      </div>
-    )
-  }
+          {isExpanded ? hideFullLabel : showFullLabel}
+        </button>
+      )}
+    </div>
+  )
+}
 
 export function ModerationPage() {
   const queryClient = useQueryClient()
   const { user, isAuthenticated } = useAuth()
+  const { t, i18n } = useTranslation()
 
+  const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
   const isModerator = isAuthenticated && user?.role === 'moderator'
 
-  const [editingPropertyId, setEditingPropertyId] = useState<number | null>(
+  const [rejectingPropertyId, setRejectingPropertyId] = useState<number | null>(
     null,
   )
-  const [editForm, setEditForm] = useState<ModerationEditForm | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   const {
     data: moderationProperties = [],
@@ -135,62 +140,65 @@ export function ModerationPage() {
     enabled: isModerator,
   })
 
-  const updatePropertyMutation = useMutation({
-    mutationFn: ({
-      propertyId,
-      data,
-    }: {
-      propertyId: number
-      data: ModerationEditForm
-    }) => updateProperty(propertyId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
-      setEditingPropertyId(null)
-      setEditForm(null)
-    },
+  const {
+    data: moderationLogs = [],
+    isLoading: isLogsLoading,
+    isError: isLogsError,
+  } = useQuery({
+    queryKey: ['moderation-logs'],
+    queryFn: getModerationLogs,
+    enabled: isModerator,
   })
 
   const approvePropertyMutation = useMutation({
     mutationFn: approveProperty,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
+      queryClient.invalidateQueries({ queryKey: ['moderation-logs'] })
+      setRejectingPropertyId(null)
+      setRejectReason('')
     },
   })
 
   const rejectPropertyMutation = useMutation({
-    mutationFn: rejectProperty,
+    mutationFn: ({
+      propertyId,
+      reason,
+    }: {
+      propertyId: number
+      reason: string
+    }) => rejectProperty(propertyId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
+      queryClient.invalidateQueries({ queryKey: ['moderation-logs'] })
+      setRejectingPropertyId(null)
+      setRejectReason('')
     },
   })
-
-  const handleStartEdit = (property: Property) => {
-    setEditingPropertyId(property.id)
-    setEditForm(getEditFormFromProperty(property))
-  }
-
-  const handleCancelEdit = () => {
-    setEditingPropertyId(null)
-    setEditForm(null)
-  }
-
-  const handleSaveEdit = () => {
-    if (!editingPropertyId || !editForm) {
-      return
-    }
-
-    updatePropertyMutation.mutate({
-      propertyId: editingPropertyId,
-      data: editForm,
-    })
-  }
 
   const handleApprove = (propertyId: number) => {
     approvePropertyMutation.mutate(propertyId)
   }
 
-  const handleReject = (propertyId: number) => {
-    rejectPropertyMutation.mutate(propertyId)
+  const handleStartReject = (propertyId: number) => {
+    setRejectingPropertyId(propertyId)
+    setRejectReason('')
+  }
+
+  const handleCancelReject = () => {
+    setRejectingPropertyId(null)
+    setRejectReason('')
+  }
+
+  const handleConfirmReject = () => {
+    if (!rejectingPropertyId || !rejectReason.trim()) {
+      return
+    }
+
+    rejectPropertyMutation.mutate({
+      propertyId: rejectingPropertyId,
+      reason: rejectReason.trim(),
+    })
   }
 
   const isActionPending =
@@ -198,24 +206,24 @@ export function ModerationPage() {
 
   if (!isModerator) {
     return (
-      <section className="mx-auto max-w-xl rounded-2xl bg-white p-8 shadow-sm">
+      <section className="mx-auto max-w-xl rounded-2xl bg-white p-4 shadow-sm sm:p-8">
         <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-          Доступ ограничен
+          {t('moderationPage.accessLimited')}
         </p>
 
         <h1 className="mt-2 text-2xl font-bold text-slate-900">
-          Модераторский кабинет недоступен
+          {t('moderationPage.noAccessTitle')}
         </h1>
 
         <p className="mt-3 text-slate-600">
-          Эта страница доступна только пользователям с ролью модератора.
+          {t('moderationPage.noAccessText')}
         </p>
 
         <Link
           to="/profile"
           className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700"
         >
-          Вернуться в личный кабинет
+          {t('moderationPage.backToProfile')}
         </Link>
       </section>
     )
@@ -223,245 +231,91 @@ export function ModerationPage() {
 
   return (
     <section className="space-y-8">
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
         <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-          Модераторский кабинет
+          {t('moderationPage.badge')}
         </p>
 
         <h1 className="mt-2 text-2xl font-bold text-slate-900">
-          Объявления на проверке
+          {t('moderationPage.title')}
         </h1>
 
-        <p className="mt-2 text-slate-600">
-          Здесь модератор может проверить объявление, отредактировать его перед
-          публикацией, одобрить или отклонить.
-        </p>
+        <p className="mt-2 text-slate-600">{t('moderationPage.subtitle')}</p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">На проверке</p>
+            <p className="text-sm text-slate-500">
+              {t('moderationPage.onReview')}
+            </p>
+
             <p className="mt-1 text-2xl font-bold text-slate-900">
               {moderationProperties.length}
             </p>
           </div>
 
           <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-            <p className="text-sm text-green-700">Одобрение</p>
+            <p className="text-sm text-green-700">
+              {t('moderationPage.approval')}
+            </p>
+
             <p className="mt-1 text-sm font-medium text-green-800">
-              Объявление появится в каталоге
+              {t('moderationPage.approvalText')}
             </p>
           </div>
 
           <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="text-sm text-red-700">Отклонение</p>
+            <p className="text-sm text-red-700">
+              {t('moderationPage.rejection')}
+            </p>
+
             <p className="mt-1 text-sm font-medium text-red-800">
-              Объявление не будет опубликовано
+              {t('moderationPage.rejectionText')}
             </p>
           </div>
         </div>
       </div>
 
-      {editForm && (
-        <div className="rounded-2xl bg-white p-8 shadow-sm">
-          <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-            Проверка объявления
-          </p>
-
-          <h2 className="mt-2 text-2xl font-bold text-slate-900">
-            Редактировать перед публикацией
-          </h2>
-
-          <p className="mt-2 text-slate-600">
-            После сохранения изменения будут отправлены на сервер.
-          </p>
-
-          {updatePropertyMutation.isError && (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-              Не удалось сохранить изменения. Проверьте данные и попробуйте ещё
-              раз.
-            </div>
-          )}
-
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Заголовок
-              </label>
-
-              <input
-                value={editForm.title}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    title: event.target.value,
-                  })
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Описание
-              </label>
-
-              <textarea
-                value={editForm.description}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    description: event.target.value,
-                  })
-                }
-                rows={4}
-                className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Цена
-              </label>
-
-              <input
-                type="number"
-                value={editForm.price}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    price: Number(event.target.value),
-                  })
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Адрес
-              </label>
-
-              <input
-                value={editForm.address}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    address: event.target.value,
-                  })
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Площадь, м²
-              </label>
-
-              <input
-                type="number"
-                value={editForm.area}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    area: Number(event.target.value),
-                  })
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Количество комнат
-              </label>
-
-              <select
-                value={editForm.rooms}
-                onChange={(event) =>
-                  setEditForm({
-                    ...editForm,
-                    rooms: Number(event.target.value),
-                  })
-                }
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              >
-                <option value={0}>Студия</option>
-                <option value={1}>1 комната</option>
-                <option value={2}>2 комнаты</option>
-                <option value={3}>3 комнаты</option>
-                <option value={4}>4 комнаты</option>
-                <option value={5}>5+ комнат</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleSaveEdit}
-              disabled={updatePropertyMutation.isPending}
-              className="rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {updatePropertyMutation.isPending
-                ? 'Сохраняем...'
-                : 'Сохранить изменения'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="rounded-xl border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-              Очередь модерации
+              {t('moderationPage.queueBadge')}
             </p>
 
             <h2 className="mt-2 text-2xl font-bold text-slate-900">
-              Нужно проверить
+              {t('moderationPage.queueTitle')}
             </h2>
 
             <p className="mt-2 text-slate-600">
-              Эти объявления ожидают решения модератора.
+              {t('moderationPage.queueSubtitle')}
             </p>
           </div>
 
           <p className="text-sm text-slate-500">
-            Всего: {moderationProperties.length}
+            {t('moderationPage.total')}: {moderationProperties.length}
           </p>
         </div>
 
         {isLoading && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            Загружаем объявления на модерации...
+            {t('moderationPage.loading')}
           </div>
         )}
 
         {isError && (
           <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-            Не удалось загрузить объявления на модерации. Проверьте права
-            доступа и попробуйте обновить страницу.
+            {t('moderationPage.loadError')}
           </div>
         )}
 
         {!isLoading && !isError && moderationProperties.length === 0 && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6">
             <h3 className="font-semibold text-slate-900">
-              Объявлений на проверке нет
+              {t('moderationPage.emptyTitle')}
             </h3>
 
             <p className="mt-2 text-sm text-slate-600">
-              Когда пользователи отправят объявления на модерацию, они появятся
-              здесь.
+              {t('moderationPage.emptyText')}
             </p>
           </div>
         )}
@@ -474,52 +328,60 @@ export function ModerationPage() {
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
               >
                 <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-                    <PropertyPhotoGallery property={property} />
+                  <PropertyPhotoGallery
+                    property={property}
+                    selectPhotoLabel={t('moderationPage.selectPhoto')}
+                  />
 
-                  <div className="p-5">
+                  <div className="min-w-0 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-xl font-bold text-slate-900">
-                          {formatPrice(property.price, property.type)}
+                          {formatPrice(
+                            property.price,
+                            property.type,
+                            locale,
+                            t('property.perMonth'),
+                          )}
                         </p>
 
                         <p className="mt-1 text-sm font-medium text-blue-600">
-                          {getDealTypeLabel(property.type)}
+                          {property.type === 'sale'
+                            ? t('property.sale')
+                            : t('property.rent')}
                         </p>
                       </div>
 
                       <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-800">
-                        На модерации
+                        {t('moderationPage.statusModeration')}
                       </span>
                     </div>
 
-                    <h3 className="mt-4 text-lg font-semibold text-slate-900">
+                    <h3 className="mt-4 break-words text-lg font-semibold text-slate-900 [overflow-wrap:anywhere]">
                       {property.title}
                     </h3>
-                    
-                    <ExpandableDescription text={property.description} />
+
+                    <ExpandableDescription
+                      text={property.description}
+                      showFullLabel={t('moderationPage.showFull')}
+                      hideFullLabel={t('moderationPage.hideFull')}
+                    />
 
                     <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
                       <span>{property.area} м²</span>
                       <span>•</span>
                       <span>
                         {property.rooms === 0
-                          ? 'Студия'
-                          : `${property.rooms} комн.`}
+                          ? t('catalog.studio')
+                          : `${property.rooms} ${t(
+                              'property.rooms',
+                            ).toLowerCase()}`}
                       </span>
                       <span>•</span>
                       <span>{property.address}</span>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(property)}
-                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Редактировать
-                      </button>
-
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
                         onClick={() => handleApprove(property.id)}
@@ -527,24 +389,155 @@ export function ModerationPage() {
                         className="rounded-xl border border-green-200 px-4 py-2 text-sm font-medium text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {approvePropertyMutation.isPending
-                          ? 'Одобряем...'
-                          : 'Одобрить'}
+                          ? t('moderationPage.approving')
+                          : t('moderationPage.approve')}
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => handleReject(property.id)}
+                        onClick={() => handleStartReject(property.id)}
                         disabled={isActionPending}
                         className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {rejectPropertyMutation.isPending
-                          ? 'Отклоняем...'
-                          : 'Отклонить'}
+                        {t('moderationPage.reject')}
                       </button>
                     </div>
+
+                    {rejectingPropertyId === property.id && (
+                      <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                        <label className="block text-sm font-medium text-red-800">
+                          {t('moderationPage.rejectReasonLabel')}
+                        </label>
+
+                        <textarea
+                          value={rejectReason}
+                          onChange={(event) =>
+                            setRejectReason(event.target.value)
+                          }
+                          rows={3}
+                          placeholder={t(
+                            'moderationPage.rejectReasonPlaceholder',
+                          )}
+                          className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-red-400"
+                        />
+
+                        {rejectPropertyMutation.isError && (
+                          <p className="mt-2 text-sm font-medium text-red-700">
+                            {t('moderationPage.rejectError')}
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                          <button
+                            type="button"
+                            onClick={handleConfirmReject}
+                            disabled={
+                              rejectPropertyMutation.isPending ||
+                              !rejectReason.trim()
+                            }
+                            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                          >
+                            {rejectPropertyMutation.isPending
+                              ? t('moderationPage.rejecting')
+                              : t('moderationPage.confirmReject')}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleCancelReject}
+                            className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                          >
+                            {t('common.cancel')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
+              {t('moderationPage.logsBadge')}
+            </p>
+
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">
+              {t('moderationPage.logsTitle')}
+            </h2>
+
+            <p className="mt-2 text-slate-600">
+              {t('moderationPage.logsSubtitle')}
+            </p>
+          </div>
+
+          <p className="text-sm text-slate-500">
+            {t('moderationPage.total')}: {moderationLogs.length}
+          </p>
+        </div>
+
+        {isLogsLoading && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            {t('moderationPage.logsLoading')}
+          </div>
+        )}
+
+        {isLogsError && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+            {t('moderationPage.logsError')}
+          </div>
+        )}
+
+        {!isLogsLoading && !isLogsError && moderationLogs.length === 0 && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6">
+            <h3 className="font-semibold text-slate-900">
+              {t('moderationPage.logsEmptyTitle')}
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-600">
+              {t('moderationPage.logsEmptyText')}
+            </p>
+          </div>
+        )}
+
+        {!isLogsLoading && !isLogsError && moderationLogs.length > 0 && (
+          <div className="mt-6 space-y-3">
+            {moderationLogs.map((log) => (
+              <div
+                key={log.id}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {t('moderationPage.logListingId')}:{' '}
+                      {log.listing_id ?? '—'}
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-600">
+                      {t('moderationPage.logAction')}:{' '}
+                      {log.action ?? log.status ?? '—'}
+                    </p>
+
+                    {log.reason && (
+                      <p className="mt-2 whitespace-pre-line break-words text-sm text-slate-700 [overflow-wrap:anywhere]">
+                        {t('moderationPage.logReason')}: {log.reason}
+                      </p>
+                    )}
+                  </div>
+
+                  {log.created_at && (
+                    <p className="text-sm text-slate-500">
+                      {new Date(log.created_at).toLocaleString(locale)}
+                    </p>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}

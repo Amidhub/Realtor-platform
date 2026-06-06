@@ -1,5 +1,6 @@
 // Схема валидации формы создания объявления.
-// Поля соответствуют backend-схеме Listing_S.
+// Основные поля соответствуют backend-схеме Listing_S.
+// Поля инфраструктуры и инвестиций пока используются на frontend для 4 недели.
 
 import { z } from 'zod'
 
@@ -44,6 +45,34 @@ export const createPropertySchema = z.object({
     .int('Количество комнат должно быть целым числом')
     .min(0, 'Количество комнат не может быть отрицательным')
     .max(20, 'Слишком большое количество комнат'),
+
+  hasMetro: z.boolean(),
+  hasSchool: z.boolean(),
+  hasKindergarten: z.boolean(),
+  hasPark: z.boolean(),
+  hasShops: z.boolean(),
+  hasHospital: z.boolean(),
+
+  monthlyRent: z
+    .number()
+    .positive('Значение должно быть больше 0')
+    .optional(),
+
+  rentalYield: z
+    .number()
+    .positive('Значение должно быть больше 0')
+    .optional(),
+
+  resaleProfit: z
+    .number()
+    .positive('Значение должно быть больше 0')
+    .optional(),
+
+  investmentComment: z
+    .string()
+    .max(500, 'Комментарий слишком длинный')
+    .optional(),
 })
 
-export type CreatePropertyFormValues = z.infer<typeof createPropertySchema>
+export type CreatePropertyFormValues = z.input<typeof createPropertySchema>
+export type CreatePropertySubmitValues = z.output<typeof createPropertySchema>

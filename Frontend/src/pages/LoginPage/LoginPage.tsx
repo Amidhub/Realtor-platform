@@ -6,12 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../app/AuthContext'
 import { loginSchema, type LoginFormValues } from './loginSchema'
 
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [authError, setAuthError] = useState('')
 
   const {
@@ -34,26 +36,21 @@ export function LoginPage() {
       navigate('/profile')
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 422) {
-          setAuthError('Проверьте корректность email и пароля.')
-          return
-        }
-
-        setAuthError('Неверный email или пароль.')
+        setAuthError(t('auth.loginError'))
         return
       }
 
-      setAuthError('Неверный email или пароль.')
+      setAuthError(t('auth.loginError'))
     }
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-2xl bg-white p-8 shadow-sm">
-      <h1 className="text-2xl font-bold text-slate-900">Вход</h1>
+    <section className="mx-auto max-w-md rounded-2xl bg-white p-4 shadow-sm sm:p-8">
+      <h1 className="text-2xl font-bold text-slate-900">
+        {t('auth.loginTitle')}
+      </h1>
 
-      <p className="mt-2 text-slate-600">
-        Войдите в аккаунт, чтобы управлять своими объявлениями.
-      </p>
+      <p className="mt-2 text-slate-600">{t('auth.loginSubtitle')}</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
         <div>
@@ -61,13 +58,13 @@ export function LoginPage() {
             htmlFor="email"
             className="block text-sm font-medium text-slate-700"
           >
-            Email
+            {t('auth.email')}
           </label>
 
           <input
             id="email"
             type="email"
-            placeholder="example@mail.com"
+            placeholder={t('auth.emailPlaceholder')}
             {...register('email')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -84,13 +81,13 @@ export function LoginPage() {
             htmlFor="password"
             className="block text-sm font-medium text-slate-700"
           >
-            Пароль
+            {t('auth.password')}
           </label>
 
           <input
             id="password"
             type="password"
-            placeholder="Введите пароль"
+            placeholder={t('auth.passwordPlaceholder')}
             {...register('password')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -113,7 +110,7 @@ export function LoginPage() {
           disabled={isSubmitting}
           className="w-full rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          {isSubmitting ? 'Входим...' : 'Войти'}
+          {isSubmitting ? t('common.loading') : t('auth.submitLogin')}
         </button>
       </form>
     </section>

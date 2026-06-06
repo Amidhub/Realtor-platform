@@ -5,11 +5,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../app/AuthContext'
 import { registerSchema, type RegisterFormValues } from './registerSchema'
 
 export function RegisterPage() {
   const { register: registerUser } = useAuth()
+  const { t } = useTranslation()
   const [isSuccess, setIsSuccess] = useState(false)
 
   const {
@@ -33,18 +35,20 @@ export function RegisterPage() {
       password: data.password,
     })
 
-    console.log('Данные регистрации:', data)
+    console.log('Registration data:', data)
 
     setIsSuccess(true)
     reset()
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-2xl bg-white p-8 shadow-sm">
-      <h1 className="text-2xl font-bold text-slate-900">Регистрация</h1>
+    <section className="mx-auto max-w-md rounded-2xl bg-white p-4 shadow-sm sm:p-8">
+      <h1 className="text-2xl font-bold text-slate-900">
+        {t('auth.registerTitle')}
+      </h1>
 
       <p className="mt-2 text-slate-600">
-        Создайте аккаунт, чтобы размещать объявления и управлять ими.
+        {t('auth.registerSubtitle')}
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
@@ -53,13 +57,13 @@ export function RegisterPage() {
             htmlFor="fullName"
             className="block text-sm font-medium text-slate-700"
           >
-            Имя
+            {t('auth.name')}
           </label>
 
           <input
             id="fullName"
             type="text"
-            placeholder="Иван Иванов"
+            placeholder={t('auth.namePlaceholder')}
             {...register('fullName')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -76,13 +80,13 @@ export function RegisterPage() {
             htmlFor="email"
             className="block text-sm font-medium text-slate-700"
           >
-            Email
+            {t('auth.email')}
           </label>
 
           <input
             id="email"
             type="email"
-            placeholder="example@mail.com"
+            placeholder={t('auth.emailPlaceholder')}
             {...register('email')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -99,13 +103,13 @@ export function RegisterPage() {
             htmlFor="password"
             className="block text-sm font-medium text-slate-700"
           >
-            Пароль
+            {t('auth.password')}
           </label>
 
           <input
             id="password"
             type="password"
-            placeholder="Минимум 6 символов"
+            placeholder={t('auth.passwordMinPlaceholder')}
             {...register('password')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -122,13 +126,13 @@ export function RegisterPage() {
             htmlFor="confirmPassword"
             className="block text-sm font-medium text-slate-700"
           >
-            Повторите пароль
+            {t('auth.confirmPassword')}
           </label>
 
           <input
             id="confirmPassword"
             type="password"
-            placeholder="Повторите пароль"
+            placeholder={t('auth.confirmPasswordPlaceholder')}
             {...register('confirmPassword')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -145,14 +149,14 @@ export function RegisterPage() {
           disabled={isSubmitting}
           className="w-full rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          Зарегистрироваться
+          {isSubmitting ? t('common.loading') : t('auth.submitRegister')}
         </button>
       </form>
 
       {isSuccess && (
         <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4">
           <p className="text-sm font-medium text-green-800">
-            Регистрация прошла успешно. Теперь можно войти в аккаунт.
+            {t('auth.registerSuccessText')}
           </p>
         </div>
       )}

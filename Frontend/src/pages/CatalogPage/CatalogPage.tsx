@@ -1,11 +1,10 @@
 // Страница каталога недвижимости.
-// Получает объявления с backend через /listings/filter_search.
-// Если backend недоступен, использует mock-данные как fallback.
-// В каталоге показываются только активные объявления.
+// Сейчас работает на mock-данных, чтобы спокойно доделать frontend-часть.
+// Позже sourceProperties можно будет снова заменить на данные из backend.
 
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getProperties } from '../../api/propertiesApi'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { mockProperties } from '../../data/mockProperties'
 import type { Property } from '../../types/property'
 
@@ -30,14 +29,17 @@ const fallbackPhotoGroups = [
   ],
 ]
 
-function formatPrice(price: number, type: Property['type']) {
-  const formattedPrice = new Intl.NumberFormat('ru-RU').format(price)
+function formatPrice(
+  price: number,
+  type: Property['type'],
+  locale: string,
+  perMonthLabel: string,
+) {
+  const formattedPrice = new Intl.NumberFormat(locale).format(price)
 
-  return type === 'rent' ? `${formattedPrice} ₽/мес.` : `${formattedPrice} ₽`
-}
-
-function getDealTypeLabel(type: Property['type']) {
-  return type === 'sale' ? 'Продажа' : 'Аренда'
+  return type === 'rent'
+    ? `${formattedPrice} ₽/${perMonthLabel}`
+    : `${formattedPrice} ₽`
 }
 
 function isDisplayablePhoto(photo: string) {
@@ -63,8 +65,13 @@ function getPropertyPhotos(property: Property) {
 }
 
 function PropertyCard({ property }: { property: Property }) {
+  const { t, i18n } = useTranslation()
   const photos = getPropertyPhotos(property)
   const [selectedPhoto, setSelectedPhoto] = useState(photos[0])
+
+  const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
+  const dealTypeLabel =
+    property.type === 'sale' ? t('property.sale') : t('property.rent')
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -99,16 +106,23 @@ function PropertyCard({ property }: { property: Property }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-2xl font-bold text-slate-900">
-              {formatPrice(property.price, property.type)}
+              {formatPrice(
+                property.price,
+                property.type,
+                locale,
+                t('property.perMonth'),
+              )}
             </p>
 
             <p className="mt-1 text-sm font-medium text-blue-600">
-              {getDealTypeLabel(property.type)}
+              {dealTypeLabel}
             </p>
           </div>
 
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-            {property.rooms === 0 ? 'Студия' : `${property.rooms} комн.`}
+            {property.rooms === 0
+              ? t('catalog.studio')
+              : `${property.rooms} ${t('property.rooms').toLowerCase()}`}
           </span>
         </div>
 
@@ -125,12 +139,49 @@ function PropertyCard({ property }: { property: Property }) {
           <span>•</span>
           <span>{property.address}</span>
         </div>
+
+        {property.infrastructure && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {property.infrastructure.metro && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                {t('property.transport')}
+              </span>
+            )}
+
+            {property.infrastructure.school && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                {t('property.school')}
+              </span>
+            )}
+
+            {property.infrastructure.park && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                {t('property.parks')}
+              </span>
+            )}
+
+            {property.infrastructure.shop && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                {t('property.shops')}
+              </span>
+            )}
+          </div>
+        )}
+
+        <Link
+          to={`/properties/${property.id}`}
+          className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+        >
+          {t('common.details')}
+        </Link>
       </div>
     </article>
   )
 }
 
 export function CatalogPage() {
+  const { t } = useTranslation()
+
   const [searchQuery, setSearchQuery] = useState('')
   const [dealType, setDealType] = useState<DealTypeFilter>('all')
   const [minPrice, setMinPrice] = useState('')
@@ -139,33 +190,7 @@ export function CatalogPage() {
   const [minArea, setMinArea] = useState('')
   const [sortOption, setSortOption] = useState<SortOption>('newest')
 
-  const backendParams = useMemo(() => {
-    const sortBy: 'price' | 'created_at' =
-      sortOption === 'newest' ? 'created_at' : 'price'
-
-    const sortOrder: 'asc' | 'desc' =
-      sortOption === 'priceAsc' ? 'asc' : 'desc'
-
-    return {
-      offset: 0,
-      limit: 100,
-      start_price: minPrice ? Number(minPrice) : undefined,
-      finish_price: maxPrice ? Number(maxPrice) : undefined,
-      rooms: rooms ? Number(rooms) : undefined,
-      type: dealType === 'all' ? undefined : dealType,
-      sort_by: sortBy,
-      sort_order: sortOrder,
-    }
-  }, [dealType, maxPrice, minPrice, rooms, sortOption])
-
-  const propertiesQuery = useQuery({
-    queryKey: ['properties', backendParams],
-    queryFn: () => getProperties(backendParams),
-  })
-
-  const sourceProperties =
-    propertiesQuery.data?.list_listings ??
-    (propertiesQuery.isError ? mockProperties : [])
+  const sourceProperties = mockProperties
 
   const filteredProperties = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase()
@@ -242,36 +267,26 @@ export function CatalogPage() {
     <section className="space-y-6">
       <div className="rounded-2xl bg-white p-8 shadow-sm">
         <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-          Каталог недвижимости
+          {t('catalog.realEstateCatalog')}
         </p>
 
         <h1 className="mt-2 text-3xl font-bold text-slate-900">
-          Найдите подходящий объект
+          {t('catalog.title')}
         </h1>
 
         <p className="mt-3 max-w-2xl text-slate-600">
-          Используйте поиск по адресу, фильтры и сортировку, чтобы быстрее найти
-          подходящее объявление.
+          {t('catalog.subtitle')}
         </p>
       </div>
 
       <div className="rounded-2xl bg-white p-6 shadow-sm">
-        {propertiesQuery.isError && (
-          <div className="mb-5 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-            <p className="text-sm text-yellow-800">
-              Backend сейчас не отвечает для каталога, поэтому отображаются
-              mock-данные.
-            </p>
-          </div>
-        )}
-
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
           <div>
             <label
               htmlFor="search"
               className="block text-sm font-medium text-slate-700"
             >
-              Поиск по адресу
+              {t('catalog.searchByAddress')}
             </label>
 
             <input
@@ -279,7 +294,7 @@ export function CatalogPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Например, ул. Мира"
+              placeholder={t('catalog.searchPlaceholder')}
               className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             />
           </div>
@@ -289,7 +304,7 @@ export function CatalogPage() {
               htmlFor="dealType"
               className="block text-sm font-medium text-slate-700"
             >
-              Тип сделки
+              {t('catalog.dealType')}
             </label>
 
             <select
@@ -300,9 +315,9 @@ export function CatalogPage() {
               }
               className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             >
-              <option value="all">Все</option>
-              <option value="sale">Продажа</option>
-              <option value="rent">Аренда</option>
+              <option value="all">{t('catalog.all')}</option>
+              <option value="sale">{t('property.sale')}</option>
+              <option value="rent">{t('property.rent')}</option>
             </select>
           </div>
 
@@ -311,7 +326,7 @@ export function CatalogPage() {
               htmlFor="sort"
               className="block text-sm font-medium text-slate-700"
             >
-              Сортировка
+              {t('catalog.sort')}
             </label>
 
             <select
@@ -322,9 +337,9 @@ export function CatalogPage() {
               }
               className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             >
-              <option value="newest">Сначала новые</option>
-              <option value="priceAsc">Цена по возрастанию</option>
-              <option value="priceDesc">Цена по убыванию</option>
+              <option value="newest">{t('catalog.newest')}</option>
+              <option value="priceAsc">{t('catalog.priceAsc')}</option>
+              <option value="priceDesc">{t('catalog.priceDesc')}</option>
             </select>
           </div>
         </div>
@@ -335,7 +350,7 @@ export function CatalogPage() {
               htmlFor="minPrice"
               className="block text-sm font-medium text-slate-700"
             >
-              Цена от
+              {t('catalog.priceFrom')}
             </label>
 
             <input
@@ -353,7 +368,7 @@ export function CatalogPage() {
               htmlFor="maxPrice"
               className="block text-sm font-medium text-slate-700"
             >
-              Цена до
+              {t('catalog.priceTo')}
             </label>
 
             <input
@@ -371,7 +386,7 @@ export function CatalogPage() {
               htmlFor="rooms"
               className="block text-sm font-medium text-slate-700"
             >
-              Комнаты
+              {t('catalog.rooms')}
             </label>
 
             <select
@@ -380,12 +395,12 @@ export function CatalogPage() {
               onChange={(event) => setRooms(event.target.value)}
               className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             >
-              <option value="">Любое</option>
-              <option value="0">Студия</option>
-              <option value="1">1 комната</option>
-              <option value="2">2 комнаты</option>
-              <option value="3">3 комнаты</option>
-              <option value="4">4 комнаты</option>
+              <option value="">{t('catalog.any')}</option>
+              <option value="0">{t('catalog.studio')}</option>
+              <option value="1">{t('catalog.oneRoom')}</option>
+              <option value="2">{t('catalog.twoRooms')}</option>
+              <option value="3">{t('catalog.threeRooms')}</option>
+              <option value="4">{t('catalog.fourRooms')}</option>
             </select>
           </div>
 
@@ -394,7 +409,7 @@ export function CatalogPage() {
               htmlFor="minArea"
               className="block text-sm font-medium text-slate-700"
             >
-              Площадь от, м²
+              {t('catalog.areaFrom')}
             </label>
 
             <input
@@ -410,16 +425,8 @@ export function CatalogPage() {
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">
-            {propertiesQuery.isPending ? (
-              'Загрузка объектов...'
-            ) : (
-              <>
-                Найдено объектов:{' '}
-                <span className="font-medium">
-                  {filteredProperties.length}
-                </span>
-              </>
-            )}
+            {t('catalog.found')}:{' '}
+            <span className="font-medium">{filteredProperties.length}</span>
           </p>
 
           <button
@@ -427,7 +434,7 @@ export function CatalogPage() {
             onClick={resetFilters}
             className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
           >
-            Сбросить фильтры
+            {t('catalog.resetFilters')}
           </button>
         </div>
       </div>
@@ -441,12 +448,10 @@ export function CatalogPage() {
       ) : (
         <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">
-            Объекты не найдены
+            {t('catalog.notFoundTitle')}
           </h2>
 
-          <p className="mt-2 text-slate-600">
-            Попробуйте изменить параметры поиска или сбросить фильтры.
-          </p>
+          <p className="mt-2 text-slate-600">{t('catalog.notFoundText')}</p>
         </div>
       )}
     </section>

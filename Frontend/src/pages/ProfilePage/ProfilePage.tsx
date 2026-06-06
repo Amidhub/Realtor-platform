@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../app/AuthContext'
 import {
@@ -22,25 +23,17 @@ type EditPropertyForm = {
   address: string
 }
 
-function formatPrice(price: number, type: Property['type']) {
-  const formattedPrice = new Intl.NumberFormat('ru-RU').format(price)
+function formatPrice(
+  price: number,
+  type: Property['type'],
+  locale: string,
+  perMonthLabel: string,
+) {
+  const formattedPrice = new Intl.NumberFormat(locale).format(price)
 
-  return type === 'rent' ? `${formattedPrice} ₽/мес.` : `${formattedPrice} ₽`
-}
-
-function getDealTypeLabel(type: Property['type']) {
-  return type === 'sale' ? 'Продажа' : 'Аренда'
-}
-
-function getStatusLabel(status: Property['status']) {
-  const statusLabels: Record<Property['status'], string> = {
-    draft: 'Черновик',
-    moderation: 'На модерации',
-    active: 'Активно',
-    rejected: 'Отклонено',
-  }
-
-  return statusLabels[status]
+  return type === 'rent'
+    ? `${formattedPrice} ₽/${perMonthLabel}`
+    : `${formattedPrice} ₽`
 }
 
 function getStatusClass(status: Property['status']) {
@@ -61,7 +54,15 @@ function getPropertyPhotos(property: Property) {
   return property.photos.length > 0 ? property.photos : [fallbackPhoto]
 }
 
-function PropertyPhotoGallery({ property }: { property: Property }) {
+type PropertyPhotoGalleryProps = {
+  property: Property
+  selectPhotoLabel: string
+}
+
+function PropertyPhotoGallery({
+  property,
+  selectPhotoLabel,
+}: PropertyPhotoGalleryProps) {
   const photos = getPropertyPhotos(property)
   const [selectedPhoto, setSelectedPhoto] = useState(photos[0])
 
@@ -86,7 +87,7 @@ function PropertyPhotoGallery({ property }: { property: Property }) {
                   ? 'border-blue-600 ring-2 ring-blue-100'
                   : 'border-transparent hover:border-slate-300',
               ].join(' ')}
-              aria-label="Выбрать фото объявления"
+              aria-label={selectPhotoLabel}
             >
               <img src={photo} alt="" className="h-full w-full object-cover" />
             </button>
@@ -109,7 +110,17 @@ function getEditFormFromProperty(property: Property): EditPropertyForm {
   }
 }
 
-function ExpandableDescription({ text }: { text: string }) {
+type ExpandableDescriptionProps = {
+  text: string
+  showFullLabel: string
+  hideFullLabel: string
+}
+
+function ExpandableDescription({
+  text,
+  showFullLabel,
+  hideFullLabel,
+}: ExpandableDescriptionProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const shouldShowToggle = text.length > 120
 
@@ -130,7 +141,7 @@ function ExpandableDescription({ text }: { text: string }) {
           onClick={() => setIsExpanded((currentValue) => !currentValue)}
           className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {isExpanded ? 'Скрыть' : 'Показать полностью'}
+          {isExpanded ? hideFullLabel : showFullLabel}
         </button>
       )}
     </div>
@@ -140,6 +151,9 @@ function ExpandableDescription({ text }: { text: string }) {
 export function ProfilePage() {
   const { user, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
+  const { t, i18n } = useTranslation()
+
+  const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
 
   const [editingPropertyId, setEditingPropertyId] = useState<number | null>(
     null,
@@ -204,9 +218,7 @@ export function ProfilePage() {
   }
 
   const handleDeleteProperty = (propertyId: number) => {
-    const isConfirmed = window.confirm(
-      'Удалить объявление? Это действие нельзя отменить.',
-    )
+    const isConfirmed = window.confirm(t('profile.deleteConfirm'))
 
     if (!isConfirmed) {
       return
@@ -219,28 +231,37 @@ export function ProfilePage() {
     }
   }
 
+  const statusLabels: Record<Property['status'], string> = {
+    draft: t('profile.draft'),
+    moderation: t('profile.moderation'),
+    active: t('profile.active'),
+    rejected: t('profile.rejected'),
+  }
+
   if (!isAuthenticated || !user) {
     return (
-      <section className="mx-auto max-w-xl rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">Личный кабинет</h1>
+      <section className="mx-auto max-w-xl rounded-2xl bg-white p-4 shadow-sm sm:p-8">
+        <h1 className="text-2xl font-bold text-slate-900">
+          {t('profile.notAuthenticatedTitle')}
+        </h1>
 
         <p className="mt-3 text-slate-600">
-          Чтобы открыть личный кабинет, нужно войти в аккаунт.
+          {t('profile.notAuthenticatedText')}
         </p>
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link
             to="/login"
-            className="rounded-xl bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700"
+            className="rounded-xl bg-blue-600 px-5 py-3 text-center font-medium text-white hover:bg-blue-700"
           >
-            Войти
+            {t('common.login')}
           </Link>
 
           <Link
             to="/register"
-            className="rounded-xl border border-slate-300 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-xl border border-slate-300 px-5 py-3 text-center font-medium text-slate-700 hover:bg-slate-50"
           >
-            Зарегистрироваться
+            {t('common.register')}
           </Link>
         </div>
       </section>
@@ -249,61 +270,59 @@ export function ProfilePage() {
 
   return (
     <section className="space-y-8">
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
         <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-          Профиль пользователя
+          {t('profile.profileBadge')}
         </p>
 
         <h1 className="mt-2 text-2xl font-bold text-slate-900">
-          Личный кабинет
+          {t('profile.title')}
         </h1>
 
         <p className="mt-2 text-slate-600">
-          Вы вошли как <span className="font-medium">{user.email}</span>.
+          {t('profile.loggedInAs')}{' '}
+          <span className="font-medium">{user.email}</span>.
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link
             to="/create-property"
-            className="rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700"
+            className="rounded-xl bg-blue-600 px-5 py-3 text-center font-medium text-white transition hover:bg-blue-700"
           >
-            Создать объявление
+            {t('profile.createProperty')}
           </Link>
 
           <Link
             to="/catalog"
-            className="rounded-xl border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-slate-300 px-5 py-3 text-center font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Перейти в каталог
+            {t('profile.goToCatalog')}
           </Link>
         </div>
       </div>
 
       {editForm && (
-        <div className="rounded-2xl bg-white p-8 shadow-sm">
+        <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
           <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-            Редактирование
+            {t('profile.editBadge')}
           </p>
 
           <h2 className="mt-2 text-2xl font-bold text-slate-900">
-            Изменить объявление
+            {t('profile.editTitle')}
           </h2>
 
-          <p className="mt-2 text-slate-600">
-            После сохранения объявление будет повторно отправлено на модерацию.
-          </p>
+          <p className="mt-2 text-slate-600">{t('profile.editSubtitle')}</p>
 
           {updatePropertyMutation.isError && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-              Не удалось сохранить изменения. Проверьте данные и попробуйте ещё
-              раз.
+              {t('profile.updateError')}
             </div>
           )}
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Тип сделки
+                {t('profile.dealType')}
               </label>
 
               <select
@@ -316,14 +335,14 @@ export function ProfilePage() {
                 }
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
               >
-                <option value="sale">Продажа</option>
-                <option value="rent">Аренда</option>
+                <option value="sale">{t('property.sale')}</option>
+                <option value="rent">{t('property.rent')}</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Количество комнат
+                {t('profile.roomsLabel')}
               </label>
 
               <select
@@ -336,18 +355,18 @@ export function ProfilePage() {
                 }
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
               >
-                <option value={0}>Студия</option>
-                <option value={1}>1 комната</option>
-                <option value={2}>2 комнаты</option>
-                <option value={3}>3 комнаты</option>
-                <option value={4}>4 комнаты</option>
-                <option value={5}>5+ комнат</option>
+                <option value={0}>{t('catalog.studio')}</option>
+                <option value={1}>{t('catalog.oneRoom')}</option>
+                <option value={2}>{t('catalog.twoRooms')}</option>
+                <option value={3}>{t('catalog.threeRooms')}</option>
+                <option value={4}>{t('catalog.fourRooms')}</option>
+                <option value={5}>5+</option>
               </select>
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700">
-                Заголовок
+                {t('profile.titleLabel')}
               </label>
 
               <input
@@ -364,7 +383,7 @@ export function ProfilePage() {
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700">
-                Описание
+                {t('profile.descriptionLabel')}
               </label>
 
               <textarea
@@ -382,7 +401,7 @@ export function ProfilePage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Цена
+                {t('profile.priceLabel')}
               </label>
 
               <input
@@ -400,7 +419,7 @@ export function ProfilePage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Адрес
+                {t('profile.addressLabel')}
               </label>
 
               <input
@@ -417,7 +436,7 @@ export function ProfilePage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Площадь, м²
+                {t('profile.areaLabel')}
               </label>
 
               <input
@@ -434,7 +453,7 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={handleSaveEdit}
@@ -442,8 +461,8 @@ export function ProfilePage() {
               className="rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
             >
               {updatePropertyMutation.isPending
-                ? 'Сохраняем...'
-                : 'Сохранить изменения'}
+                ? t('profile.saving')
+                : t('profile.saveChanges')}
             </button>
 
             <button
@@ -451,56 +470,56 @@ export function ProfilePage() {
               onClick={handleCancelEdit}
               className="rounded-xl border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
           </div>
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
+      <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">
-              Мои объявления
-              </h2>
-              
-              <p className="mt-2 text-slate-600">
-                Управляйте своими объектами и отслеживайте их статус.
-              </p>
+              {t('profile.myProperties')}
+            </h2>
+
+            <p className="mt-2 text-slate-600">
+              {t('profile.managePropertiesText')}
+            </p>
           </div>
 
           <p className="text-sm text-slate-500">
-            Всего: {myProperties.length}
+            {t('profile.total')}: {myProperties.length}
           </p>
         </div>
 
         {isLoading && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            Загружаем ваши объявления...
+            {t('profile.loadingProperties')}
           </div>
         )}
 
         {isError && (
           <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-            Не удалось загрузить ваши объявления. Попробуйте обновить страницу.
+            {t('profile.loadError')}
           </div>
         )}
 
         {!isLoading && !isError && myProperties.length === 0 && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6">
             <h3 className="font-semibold text-slate-900">
-              У вас пока нет объявлений
+              {t('profile.emptyTitle')}
             </h3>
 
             <p className="mt-2 text-sm text-slate-600">
-              Создайте первое объявление, чтобы оно появилось в личном кабинете.
+              {t('profile.emptyText')}
             </p>
 
             <Link
               to="/create-property"
               className="mt-4 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-700"
             >
-              Создать объявление
+              {t('profile.createProperty')}
             </Link>
           </div>
         )}
@@ -513,17 +532,27 @@ export function ProfilePage() {
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
               >
                 <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-                  <PropertyPhotoGallery property={property} />
+                  <PropertyPhotoGallery
+                    property={property}
+                    selectPhotoLabel={t('profile.selectPhoto')}
+                  />
 
                   <div className="min-w-0 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-xl font-bold text-slate-900">
-                          {formatPrice(property.price, property.type)}
+                          {formatPrice(
+                            property.price,
+                            property.type,
+                            locale,
+                            t('property.perMonth'),
+                          )}
                         </p>
 
                         <p className="mt-1 text-sm font-medium text-blue-600">
-                          {getDealTypeLabel(property.type)}
+                          {property.type === 'sale'
+                            ? t('property.sale')
+                            : t('property.rent')}
                         </p>
                       </div>
 
@@ -533,35 +562,41 @@ export function ProfilePage() {
                           getStatusClass(property.status),
                         ].join(' ')}
                       >
-                        {getStatusLabel(property.status)}
+                        {statusLabels[property.status]}
                       </span>
                     </div>
 
                     <h3 className="mt-4 break-words text-lg font-semibold text-slate-900 [overflow-wrap:anywhere]">
                       {property.title}
                     </h3>
-                    
-                    <ExpandableDescription text={property.description} />
+
+                    <ExpandableDescription
+                      text={property.description}
+                      showFullLabel={t('profile.showFull')}
+                      hideFullLabel={t('profile.hideFull')}
+                    />
 
                     <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
                       <span>{property.area} м²</span>
                       <span>•</span>
                       <span>
                         {property.rooms === 0
-                          ? 'Студия'
-                          : `${property.rooms} комн.`}
+                          ? t('catalog.studio')
+                          : `${property.rooms} ${t(
+                              'property.rooms',
+                            ).toLowerCase()}`}
                       </span>
                       <span>•</span>
                       <span>{property.address}</span>
                     </div>
 
-                    <div className="mt-5 flex flex-wrap gap-3">
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
                         onClick={() => handleStartEdit(property)}
                         className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                       >
-                        Редактировать
+                        {t('common.edit')}
                       </button>
 
                       <button
@@ -571,8 +606,8 @@ export function ProfilePage() {
                         className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {deletePropertyMutation.isPending
-                          ? 'Удаляем...'
-                          : 'Удалить'}
+                          ? t('profile.deleting')
+                          : t('common.delete')}
                       </button>
                     </div>
                   </div>

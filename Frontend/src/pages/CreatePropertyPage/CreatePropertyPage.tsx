@@ -1,24 +1,49 @@
 // Страница создания объявления.
-// Форма отправляет данные на backend endpoint /listings/add_listing.
+// Форма отправляет основные данные на backend endpoint /listings/add_listing.
 // Также содержит загрузку фото с preview и drag&drop.
+// Блоки инфраструктуры и инвестиций добавлены для 4 недели frontend-задач.
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import {
   createProperty,
   uploadPropertyPhotos,
 } from '../../api/propertiesApi'
-import { dealTypeOptions, roomsOptions } from '../../lib/constants'
+import { roomsOptions } from '../../lib/constants'
 import {
   createPropertySchema,
   type CreatePropertyFormValues,
+  type CreatePropertySubmitValues,
 } from './createPropertySchema'
 
 const MAX_PHOTOS_COUNT = 6
 
+const infrastructureOptions = [
+  { name: 'hasMetro', labelKey: 'createPropertyPage.hasMetro' },
+  { name: 'hasSchool', labelKey: 'createPropertyPage.hasSchool' },
+  { name: 'hasKindergarten', labelKey: 'createPropertyPage.hasKindergarten' },
+  { name: 'hasPark', labelKey: 'createPropertyPage.hasPark' },
+  { name: 'hasShops', labelKey: 'createPropertyPage.hasShops' },
+  { name: 'hasHospital', labelKey: 'createPropertyPage.hasHospital' },
+] as const
+
+const optionalNumberField = {
+  setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+}
+
 export function CreatePropertyPage() {
+  const { t } = useTranslation()
+
   const [isSuccess, setIsSuccess] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
   const [photoError, setPhotoError] = useState('')
@@ -48,7 +73,7 @@ export function CreatePropertyPage() {
     handleSubmit,
     formState: { errors },
     reset,
-  } = useForm<CreatePropertyFormValues>({
+  } = useForm<CreatePropertyFormValues, unknown, CreatePropertySubmitValues>({
     resolver: zodResolver(createPropertySchema),
     defaultValues: {
       type: 'sale',
@@ -58,13 +83,31 @@ export function CreatePropertyPage() {
       address: '',
       area: 0,
       rooms: 1,
+
+      hasMetro: false,
+      hasSchool: false,
+      hasKindergarten: false,
+      hasPark: false,
+      hasShops: false,
+      hasHospital: false,
+
+      monthlyRent: undefined,
+      rentalYield: undefined,
+      resaleProfit: undefined,
+      investmentComment: '',
     },
   })
 
   const createPropertyMutation = useMutation({
-    mutationFn: async (data: CreatePropertyFormValues) => {
+    mutationFn: async (data: CreatePropertySubmitValues) => {
       const createdProperty = await createProperty({
-        ...data,
+        type: data.type,
+        title: data.title,
+        description: data.description,
+        price: data.price,
+        rooms: data.rooms,
+        area: data.area,
+        address: data.address,
         status: 'moderation',
         photos: [],
       })
@@ -93,6 +136,18 @@ export function CreatePropertyPage() {
         address: '',
         area: 0,
         rooms: 1,
+
+        hasMetro: false,
+        hasSchool: false,
+        hasKindergarten: false,
+        hasPark: false,
+        hasShops: false,
+        hasHospital: false,
+
+        monthlyRent: undefined,
+        rentalYield: undefined,
+        resaleProfit: undefined,
+        investmentComment: '',
       })
     },
   })
@@ -103,17 +158,21 @@ export function CreatePropertyPage() {
     const imageFiles = newFiles.filter((file) => file.type.startsWith('image/'))
 
     if (imageFiles.length === 0) {
-      setPhotoError('Можно загружать только изображения.')
+      setPhotoError(t('createPropertyPage.onlyImagesError'))
       return
     }
 
     if (imageFiles.length !== newFiles.length) {
-      setPhotoError('Некоторые файлы не были добавлены, потому что это не изображения.')
+      setPhotoError(t('createPropertyPage.someFilesError'))
       return
     }
 
     if (selectedPhotos.length + imageFiles.length > MAX_PHOTOS_COUNT) {
-      setPhotoError(`Можно загрузить максимум ${MAX_PHOTOS_COUNT} фото.`)
+      setPhotoError(
+        t('createPropertyPage.maxPhotosError', {
+          count: MAX_PHOTOS_COUNT,
+        }),
+      )
       return
     }
 
@@ -133,9 +192,7 @@ export function CreatePropertyPage() {
     fileInputRef.current?.click()
   }
 
-  const handleFileInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       addPhotos(event.target.files)
     }
@@ -143,7 +200,7 @@ export function CreatePropertyPage() {
     event.target.value = ''
   }
 
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setIsDragging(true)
   }
@@ -152,14 +209,14 @@ export function CreatePropertyPage() {
     setIsDragging(false)
   }
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setIsDragging(false)
 
     addPhotos(event.dataTransfer.files)
   }
 
-  const onSubmit = (data: CreatePropertyFormValues) => {
+  const onSubmit = (data: CreatePropertySubmitValues) => {
     setIsSuccess(false)
     createPropertyMutation.reset()
 
@@ -167,19 +224,18 @@ export function CreatePropertyPage() {
   }
 
   return (
-    <section className="mx-auto max-w-3xl rounded-2xl bg-white p-8 shadow-sm">
+    <section className="mx-auto max-w-3xl rounded-2xl bg-white p-4 shadow-sm sm:p-8">
       <div>
         <p className="text-sm font-medium uppercase tracking-wide text-blue-600">
-          Новое объявление
+          {t('createPropertyPage.badge')}
         </p>
 
         <h1 className="mt-2 text-2xl font-bold text-slate-900">
-          Создать объявление
+          {t('createPropertyPage.title')}
         </h1>
 
         <p className="mt-2 text-slate-600">
-          Заполните данные объекта недвижимости и добавьте фотографии. После
-          создания объявление будет отправлено на модерацию.
+          {t('createPropertyPage.subtitle')}
         </p>
       </div>
 
@@ -189,7 +245,7 @@ export function CreatePropertyPage() {
             htmlFor="type"
             className="block text-sm font-medium text-slate-700"
           >
-            Тип сделки
+            {t('createPropertyPage.dealType')}
           </label>
 
           <select
@@ -197,11 +253,8 @@ export function CreatePropertyPage() {
             {...register('type')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           >
-            {dealTypeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <option value="sale">{t('property.sale')}</option>
+            <option value="rent">{t('property.rent')}</option>
           </select>
 
           {errors.type && (
@@ -214,13 +267,13 @@ export function CreatePropertyPage() {
             htmlFor="title"
             className="block text-sm font-medium text-slate-700"
           >
-            Заголовок объявления
+            {t('createPropertyPage.titleLabel')}
           </label>
 
           <input
             id="title"
             type="text"
-            placeholder="Например, светлая квартира рядом с метро"
+            placeholder={t('createPropertyPage.titlePlaceholder')}
             {...register('title')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -235,12 +288,12 @@ export function CreatePropertyPage() {
             htmlFor="description"
             className="block text-sm font-medium text-slate-700"
           >
-            Описание
+            {t('createPropertyPage.description')}
           </label>
 
           <textarea
             id="description"
-            placeholder="Опишите объект недвижимости"
+            placeholder={t('createPropertyPage.descriptionPlaceholder')}
             rows={5}
             {...register('description')}
             className="mt-2 w-full resize-none rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
@@ -258,13 +311,13 @@ export function CreatePropertyPage() {
             htmlFor="price"
             className="block text-sm font-medium text-slate-700"
           >
-            Цена
+            {t('createPropertyPage.price')}
           </label>
 
           <input
             id="price"
             type="number"
-            placeholder="Например, 8500000"
+            placeholder={t('createPropertyPage.pricePlaceholder')}
             {...register('price', { valueAsNumber: true })}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -279,13 +332,13 @@ export function CreatePropertyPage() {
             htmlFor="address"
             className="block text-sm font-medium text-slate-700"
           >
-            Адрес
+            {t('createPropertyPage.address')}
           </label>
 
           <input
             id="address"
             type="text"
-            placeholder="Например, Екатеринбург, ул. Мира, 19"
+            placeholder={t('createPropertyPage.addressPlaceholder')}
             {...register('address')}
             className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
           />
@@ -303,13 +356,13 @@ export function CreatePropertyPage() {
               htmlFor="area"
               className="block text-sm font-medium text-slate-700"
             >
-              Площадь, м²
+              {t('createPropertyPage.area')}
             </label>
 
             <input
               id="area"
               type="number"
-              placeholder="Например, 56"
+              placeholder={t('createPropertyPage.areaPlaceholder')}
               {...register('area', { valueAsNumber: true })}
               className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
             />
@@ -326,7 +379,7 @@ export function CreatePropertyPage() {
               htmlFor="rooms"
               className="block text-sm font-medium text-slate-700"
             >
-              Количество комнат
+              {t('createPropertyPage.rooms')}
             </label>
 
             <select
@@ -336,7 +389,7 @@ export function CreatePropertyPage() {
             >
               {roomsOptions.map((room) => (
                 <option key={room} value={room}>
-                  {room === 0 ? 'Студия' : room}
+                  {room === 0 ? t('createPropertyPage.studio') : room}
                 </option>
               ))}
             </select>
@@ -349,9 +402,143 @@ export function CreatePropertyPage() {
           </div>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {t('createPropertyPage.infrastructureTitle')}
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-600">
+            {t('createPropertyPage.infrastructureSubtitle')}
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {infrastructureOptions.map((option) => (
+              <label
+                key={option.name}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-700 transition hover:border-blue-300"
+              >
+                <input
+                  type="checkbox"
+                  {...register(option.name)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+
+                <span>{t(option.labelKey)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {t('createPropertyPage.investmentTitle')}
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-600">
+            {t('createPropertyPage.investmentSubtitle')}
+          </p>
+
+          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="monthlyRent"
+                className="block text-sm font-medium text-slate-700"
+              >
+                {t('createPropertyPage.monthlyRent')}
+              </label>
+
+              <input
+                id="monthlyRent"
+                type="number"
+                placeholder={t('createPropertyPage.monthlyRentPlaceholder')}
+                {...register('monthlyRent', optionalNumberField)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+              />
+
+              {errors.monthlyRent && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errors.monthlyRent.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="rentalYield"
+                className="block text-sm font-medium text-slate-700"
+              >
+                {t('createPropertyPage.rentalYield')}
+              </label>
+
+              <input
+                id="rentalYield"
+                type="number"
+                step="0.1"
+                placeholder={t('createPropertyPage.rentalYieldPlaceholder')}
+                {...register('rentalYield', optionalNumberField)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+              />
+
+              {errors.rentalYield && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errors.rentalYield.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="resaleProfit"
+                className="block text-sm font-medium text-slate-700"
+              >
+                {t('createPropertyPage.resaleProfit')}
+              </label>
+
+              <input
+                id="resaleProfit"
+                type="number"
+                placeholder={t('createPropertyPage.resaleProfitPlaceholder')}
+                {...register('resaleProfit', optionalNumberField)}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+              />
+
+              {errors.resaleProfit && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errors.resaleProfit.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="investmentComment"
+                className="block text-sm font-medium text-slate-700"
+              >
+                {t('createPropertyPage.investmentComment')}
+              </label>
+
+              <input
+                id="investmentComment"
+                type="text"
+                placeholder={t(
+                  'createPropertyPage.investmentCommentPlaceholder',
+                )}
+                {...register('investmentComment')}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+              />
+
+              {errors.investmentComment && (
+                <p className="mt-2 text-sm text-red-600">
+                  {errors.investmentComment.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div>
           <p className="block text-sm font-medium text-slate-700">
-            Фотографии объекта
+            {t('createPropertyPage.photos')}
           </p>
 
           <div
@@ -375,11 +562,13 @@ export function CreatePropertyPage() {
             />
 
             <p className="text-sm font-medium text-slate-900">
-              Перетащите фото сюда
+              {t('createPropertyPage.dragPhotos')}
             </p>
 
             <p className="mt-1 text-sm text-slate-600">
-              или выберите файлы вручную. Максимум {MAX_PHOTOS_COUNT} фото.
+              {t('createPropertyPage.choosePhotosText', {
+                count: MAX_PHOTOS_COUNT,
+              })}
             </p>
 
             <button
@@ -387,7 +576,7 @@ export function CreatePropertyPage() {
               onClick={openFileDialog}
               className="mt-4 rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
-              Выбрать фото
+              {t('createPropertyPage.choosePhotosButton')}
             </button>
           </div>
 
@@ -420,7 +609,7 @@ export function CreatePropertyPage() {
                       onClick={() => removePhoto(index)}
                       className="text-sm font-medium text-red-600 hover:text-red-700"
                     >
-                      Удалить
+                      {t('createPropertyPage.deletePhoto')}
                     </button>
                   </div>
                 </div>
@@ -435,20 +624,19 @@ export function CreatePropertyPage() {
           className="w-full rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
           {createPropertyMutation.isPending
-            ? 'Создание...'
-            : 'Создать объявление'}
+            ? t('createPropertyPage.submitting')
+            : t('createPropertyPage.submit')}
         </button>
       </form>
 
       {isSuccess && (
         <div className="mt-8 rounded-xl border border-green-200 bg-green-50 p-4">
           <h2 className="font-semibold text-green-800">
-            Объявление успешно создано
+            {t('createPropertyPage.successTitle')}
           </h2>
 
           <p className="mt-2 text-sm text-green-700">
-            Если вы добавили фотографии, они загружены. Объявление отправлено на
-            модерацию и появится в каталоге после одобрения.
+            {t('createPropertyPage.successText')}
           </p>
         </div>
       )}
@@ -456,8 +644,7 @@ export function CreatePropertyPage() {
       {createPropertyMutation.isError && (
         <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-sm font-medium text-red-700">
-            Не удалось создать объявление или загрузить фотографии. Проверьте
-            данные и попробуйте ещё раз.
+            {t('createPropertyPage.errorText')}
           </p>
         </div>
       )}

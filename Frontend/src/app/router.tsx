@@ -10,6 +10,7 @@ import { CreatePropertyPage } from '../pages/CreatePropertyPage/CreatePropertyPa
 import { ProfilePage } from '../pages/ProfilePage/ProfilePage'
 import { CatalogPage } from '../pages/CatalogPage/CatalogPage'
 import { ModerationPage } from '../pages/ModerationPage/ModerationPage'
+import { PropertyDetailsPage } from '../pages/PropertyDetailsPage/PropertyDetailsPage'
 
 export const router = createBrowserRouter([
   {
@@ -43,6 +44,10 @@ export const router = createBrowserRouter([
       {
         path: 'moderation',
         element: <ModerationPage />,
+      },
+      {
+        path: 'properties/:id',
+        element: <PropertyDetailsPage />,
       },
     ],
   },

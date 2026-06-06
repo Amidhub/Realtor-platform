@@ -207,10 +207,55 @@ export async function approveProperty(propertyId: number) {
   return response.data
 }
 
-export async function rejectProperty(propertyId: number) {
+export async function rejectProperty(propertyId: number, reason: string) {
   const response = await apiClient.patch(
     `/listings/moderation/${propertyId}/reject`,
+    {
+      reason,
+    },
   )
 
   return response.data
+}
+
+export type ModerationLog = {
+  id: number
+  listing_id?: number
+  moderator_id?: number
+  action?: string
+  status?: string
+  reason?: string | null
+  created_at?: string
+}
+
+type BackendModerationLogsResponse =
+  | ModerationLog[]
+  | {
+      logs?: ModerationLog[]
+      moderation_logs?: ModerationLog[]
+      list_logs?: ModerationLog[]
+    }
+
+function extractModerationLogs(data: BackendModerationLogsResponse) {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  return data.logs ?? data.moderation_logs ?? data.list_logs ?? []
+}
+
+export async function getModerationLogs() {
+  const response = await apiClient.get<BackendModerationLogsResponse>(
+    '/listings/moderation/logs',
+  )
+
+  return extractModerationLogs(response.data)
+}
+
+export async function getModeratorModerationLogs(moderatorId: number) {
+  const response = await apiClient.get<BackendModerationLogsResponse>(
+    `/listings/moderation/logs/moderator/${moderatorId}`,
+  )
+
+  return extractModerationLogs(response.data)
 }
