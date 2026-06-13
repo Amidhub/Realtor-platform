@@ -1,11 +1,18 @@
 // Страница каталога недвижимости.
-// Сейчас работает на mock-данных, чтобы спокойно доделать frontend-часть.
-// Позже sourceProperties можно будет снова заменить на данные из backend.
+// Получает объявления из backend через /listings/filter_search.
+// Поиск рядом работает через /listings/nearby:
+// пользователь выбирает точку на карте, frontend отправляет lat/lon/radius_km.
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { mockProperties } from '../../data/mockProperties'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { getNearbyProperties, getProperties } from '../../api/propertiesApi'
+import type { NearbyPropertiesParams } from '../../api/propertiesApi'
+import {
+  NearbyMap,
+  type NearbyMapPoint,
+} from '../../components/NearbyMap/NearbyMap'
 import type { Property } from '../../types/property'
 
 type DealTypeFilter = 'all' | Property['type']
@@ -28,6 +35,8 @@ const fallbackPhotoGroups = [
     'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=80',
   ],
 ]
+
+const nearbyRadiusKm = 50
 
 function formatPrice(
   price: number,
@@ -69,6 +78,9 @@ function PropertyCard({ property }: { property: Property }) {
   const photos = getPropertyPhotos(property)
   const [selectedPhoto, setSelectedPhoto] = useState(photos[0])
 
+  const currentPhoto =
+    selectedPhoto && photos.includes(selectedPhoto) ? selectedPhoto : photos[0]
+
   const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
   const dealTypeLabel =
     property.type === 'sale' ? t('property.sale') : t('property.rent')
@@ -76,7 +88,7 @@ function PropertyCard({ property }: { property: Property }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md">
       <img
-        src={selectedPhoto}
+        src={currentPhoto}
         alt={property.title}
         className="h-56 w-full object-cover"
       />
@@ -90,7 +102,7 @@ function PropertyCard({ property }: { property: Property }) {
               onClick={() => setSelectedPhoto(photo)}
               className={[
                 'h-14 flex-1 overflow-hidden rounded-lg border transition',
-                selectedPhoto === photo
+                currentPhoto === photo
                   ? 'border-blue-600 ring-2 ring-blue-100'
                   : 'border-transparent hover:border-slate-300',
               ].join(' ')}
@@ -190,17 +202,41 @@ export function CatalogPage() {
   const [minArea, setMinArea] = useState('')
   const [sortOption, setSortOption] = useState<SortOption>('newest')
 
-  const sourceProperties = mockProperties
+  const [nearbyPoint, setNearbyPoint] = useState<NearbyMapPoint | null>(null)
+  const [isNearbyMode, setIsNearbyMode] = useState(false)
+
+  const propertiesQuery = useQuery({
+    queryKey: ['catalog-properties'],
+    queryFn: () =>
+      getProperties({
+        offset: 0,
+        limit: 100,
+      }),
+  })
+
+  const nearbyPropertiesMutation = useMutation({
+    mutationFn: (params: NearbyPropertiesParams) => getNearbyProperties(params),
+    onSuccess: () => {
+      setIsNearbyMode(true)
+    },
+  })
+
+  const baseProperties = isNearbyMode
+    ? nearbyPropertiesMutation.data?.list_listings ?? []
+    : propertiesQuery.data?.list_listings ?? []
+
+  const sourceProperties = baseProperties.filter(
+    (property) => property.status === 'active',
+  )
 
   const filteredProperties = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
     return sourceProperties
-      .filter((property) => property.status === 'active')
       .filter((property) => {
-        const matchesSearch = property.address
-          .toLowerCase()
-          .includes(normalizedSearchQuery)
+        const matchesSearch = normalizedSearchQuery
+          ? property.address.toLowerCase().includes(normalizedSearchQuery)
+          : true
 
         const matchesDealType =
           dealType === 'all' ? true : property.type === dealType
@@ -253,6 +289,12 @@ export function CatalogPage() {
     sourceProperties,
   ])
 
+  const resetNearbySearch = () => {
+    setIsNearbyMode(false)
+    setNearbyPoint(null)
+    nearbyPropertiesMutation.reset()
+  }
+
   const resetFilters = () => {
     setSearchQuery('')
     setDealType('all')
@@ -261,7 +303,27 @@ export function CatalogPage() {
     setRooms('')
     setMinArea('')
     setSortOption('newest')
+    resetNearbySearch()
   }
+
+  const handleNearbySearch = () => {
+    if (!nearbyPoint) {
+      alert('Выберите точку на карте.')
+      return
+    }
+
+    nearbyPropertiesMutation.mutate({
+      lat: nearbyPoint.lat,
+      lon: nearbyPoint.lon,
+      radius_km: nearbyRadiusKm,
+    })
+  }
+
+  const isLoading =
+    propertiesQuery.isLoading || nearbyPropertiesMutation.isPending
+
+  const isCatalogError = propertiesQuery.isError
+  const isNearbyError = nearbyPropertiesMutation.isError
 
   return (
     <section className="space-y-6">
@@ -423,6 +485,85 @@ export function CatalogPage() {
           </div>
         </div>
 
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Поиск рядом на карте
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-600">
+                Кликните по точке на карте, чтобы найти активные объявления
+                рядом в радиусе {nearbyRadiusKm} км.
+              </p>
+            </div>
+
+            {isNearbyMode && (
+              <button
+                type="button"
+                onClick={resetNearbySearch}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white"
+              >
+                Показать весь каталог
+              </button>
+            )}
+          </div>
+
+          <div className="mt-4">
+            <NearbyMap
+              selectedPoint={nearbyPoint}
+              radiusKm={nearbyRadiusKm}
+              onSelectPoint={setNearbyPoint}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600">
+              Радиус поиска:{' '}
+              <span className="font-medium">{nearbyRadiusKm} км</span>
+            </p>
+
+            <button
+              type="button"
+              onClick={handleNearbySearch}
+              disabled={nearbyPropertiesMutation.isPending || !nearbyPoint}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {nearbyPropertiesMutation.isPending
+                ? 'Ищем...'
+                : nearbyPoint
+                  ? 'Найти рядом'
+                  : 'Выберите точку на карте'}
+            </button>
+          </div>
+
+          {nearbyPoint && (
+            <p className="mt-3 text-sm text-slate-600">
+              Точка выбрана. Можно запускать поиск рядом.
+            </p>
+          )}
+
+          {isNearbyMode && nearbyPropertiesMutation.data && (
+            <p className="mt-3 text-sm text-slate-600">
+              Показаны объявления в радиусе{' '}
+              <span className="font-medium">
+                {nearbyPropertiesMutation.data.radius_km} км
+              </span>{' '}
+              от выбранной точки. Найдено по гео:{' '}
+              <span className="font-medium">
+                {nearbyPropertiesMutation.data.count}
+              </span>
+              .
+            </p>
+          )}
+
+          {isNearbyError && (
+            <p className="mt-3 text-sm font-medium text-red-600">
+              Не удалось выполнить поиск рядом. Проверьте backend и параметры.
+            </p>
+          )}
+        </div>
+
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">
             {t('catalog.found')}:{' '}
@@ -439,20 +580,52 @@ export function CatalogPage() {
         </div>
       </div>
 
-      {filteredProperties.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProperties.map((property) => (
-            <PropertyCard key={property.id} property={property} />
-          ))}
-        </div>
-      ) : (
+      {isLoading && (
         <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">
-            {t('catalog.notFoundTitle')}
+          <p className="text-slate-600">
+            {nearbyPropertiesMutation.isPending
+              ? 'Ищем объявления рядом...'
+              : t('catalog.loading')}
+          </p>
+        </div>
+      )}
+
+      {isCatalogError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
+          <h2 className="text-xl font-semibold text-red-700">
+            Не удалось загрузить каталог
           </h2>
 
-          <p className="mt-2 text-slate-600">{t('catalog.notFoundText')}</p>
+          <p className="mt-2 text-sm text-red-600">
+            Проверьте, что backend запущен, и попробуйте обновить страницу.
+          </p>
         </div>
+      )}
+
+      {!isLoading && !isCatalogError && (
+        <>
+          {filteredProperties.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {filteredProperties.map((property) => (
+                <PropertyCard key={property.id} property={property} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
+              <h2 className="text-xl font-semibold text-slate-900">
+                {isNearbyMode
+                  ? 'Рядом ничего не найдено'
+                  : t('catalog.notFoundTitle')}
+              </h2>
+
+              <p className="mt-2 text-slate-600">
+                {isNearbyMode
+                  ? 'Попробуйте выбрать другую точку на карте.'
+                  : t('catalog.notFoundText')}
+              </p>
+            </div>
+          )}
+        </>
       )}
     </section>
   )

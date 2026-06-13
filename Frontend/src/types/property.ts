@@ -18,10 +18,18 @@ export type InvestmentInfo = {
   monthlyRent?: number
   paybackYears?: number
   profitability?: number
+  minInvestment?: number
   priceGrowth?: string
 }
 
-export type CreatePropertyRequest = {
+export type BackendInvestmentRequest = {
+  annual_yield: number
+  min_investment: number
+  payback_years: number
+  roi: number
+}
+
+export type BasePropertyFields = {
   type: DealType
   title: string
   description: string
@@ -33,13 +41,16 @@ export type CreatePropertyRequest = {
   photos: string[]
 }
 
-export type Property = CreatePropertyRequest & {
+export type CreatePropertyRequest = BasePropertyFields & {
+  infrastructure?: number[] | null
+  investment?: BackendInvestmentRequest | null
+}
+
+export type Property = BasePropertyFields & {
   id: number
   created_at: string
-
-  // Поля для 4 недели.
-  // Пока используются на frontend через mock-данные.
-  // Позже можно будет связать с backend, если он начнет отдавать эти поля.
+  latitude?: number | null
+  longitude?: number | null
   infrastructure?: Infrastructure
   investment?: InvestmentInfo
 }

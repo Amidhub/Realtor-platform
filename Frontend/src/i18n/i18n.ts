@@ -1,5 +1,6 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { apiClient } from '../api/axiosInstance'
 
 const resources = {
   ru: {
@@ -77,7 +78,8 @@ const resources = {
         loading: 'Загрузка объектов...',
         resetFilters: 'Сбросить фильтры',
         notFoundTitle: 'Объекты не найдены',
-        notFoundText: 'Попробуйте изменить параметры поиска или сбросить фильтры.',
+        notFoundText:
+          'Попробуйте изменить параметры поиска или сбросить фильтры.',
       },
 
       home: {
@@ -193,16 +195,19 @@ const resources = {
         moderation: 'На модерации',
         active: 'Активно',
         rejected: 'Отклонено',
-      
+
         notAuthenticatedTitle: 'Личный кабинет',
-        notAuthenticatedText: 'Чтобы открыть личный кабинет, нужно войти в аккаунт.',
+        notAuthenticatedText:
+          'Чтобы открыть личный кабинет, нужно войти в аккаунт.',
         profileBadge: 'Профиль пользователя',
         loggedInAs: 'Вы вошли как',
         goToCatalog: 'Перейти в каталог',
         editBadge: 'Редактирование',
         editTitle: 'Изменить объявление',
-        editSubtitle: 'После сохранения объявление будет повторно отправлено на модерацию.',
-        updateError: 'Не удалось сохранить изменения. Проверьте данные и попробуйте ещё раз.',
+        editSubtitle:
+          'После сохранения объявление будет повторно отправлено на модерацию.',
+        updateError:
+          'Не удалось сохранить изменения. Проверьте данные и попробуйте ещё раз.',
         dealType: 'Тип сделки',
         titleLabel: 'Заголовок',
         descriptionLabel: 'Описание',
@@ -212,10 +217,12 @@ const resources = {
         roomsLabel: 'Количество комнат',
         saveChanges: 'Сохранить изменения',
         saving: 'Сохраняем...',
-        managePropertiesText: 'Управляйте своими объектами и отслеживайте их статус.',
+        managePropertiesText:
+          'Управляйте своими объектами и отслеживайте их статус.',
         total: 'Всего',
         loadingProperties: 'Загружаем ваши объявления...',
-        loadError: 'Не удалось загрузить ваши объявления. Попробуйте обновить страницу.',
+        loadError:
+          'Не удалось загрузить ваши объявления. Попробуйте обновить страницу.',
         deleteConfirm: 'Удалить объявление? Это действие нельзя отменить.',
         deleting: 'Удаляем...',
         showFull: 'Показать полностью',
@@ -229,24 +236,24 @@ const resources = {
         noAccessText:
           'Эта страница доступна только пользователям с ролью модератора.',
         backToProfile: 'Вернуться в личный кабинет',
-      
+
         badge: 'Модераторский кабинет',
         title: 'Объявления на проверке',
         subtitle:
           'Здесь модератор может проверить объявление, одобрить его или отклонить с причиной.',
-      
+
         onReview: 'На проверке',
         approval: 'Одобрение',
         approvalText: 'Объявление появится в каталоге',
         rejection: 'Отклонение',
         rejectionText: 'Объявление не будет опубликовано',
-      
+
         editBadge: 'Проверка объявления',
         editTitle: 'Редактировать перед публикацией',
         editSubtitle: 'После сохранения изменения будут отправлены на сервер.',
         updateError:
           'Не удалось сохранить изменения. Проверьте данные и попробуйте ещё раз.',
-      
+
         titleLabel: 'Заголовок',
         descriptionLabel: 'Описание',
         priceLabel: 'Цена',
@@ -255,7 +262,7 @@ const resources = {
         roomsLabel: 'Количество комнат',
         saveChanges: 'Сохранить изменения',
         saving: 'Сохраняем...',
-      
+
         queueBadge: 'Очередь модерации',
         queueTitle: 'Нужно проверить',
         queueSubtitle: 'Эти объявления ожидают решения модератора.',
@@ -266,23 +273,23 @@ const resources = {
         emptyTitle: 'Объявлений на проверке нет',
         emptyText:
           'Когда пользователи отправят объявления на модерацию, они появятся здесь.',
-      
+
         statusModeration: 'На модерации',
         selectPhoto: 'Выбрать фото объявления',
         showFull: 'Показать полностью',
         hideFull: 'Скрыть',
-      
+
         approving: 'Одобряем...',
         rejecting: 'Отклоняем...',
         approve: 'Одобрить',
         reject: 'Отклонить',
-      
+
         rejectReasonLabel: 'Причина отклонения',
         rejectReasonPlaceholder:
           'Например, недостаточно фотографий или некорректное описание',
         confirmReject: 'Подтвердить отклонение',
         rejectError: 'Не удалось отклонить объявление. Попробуйте ещё раз.',
-      
+
         logsBadge: 'История модерации',
         logsTitle: 'Журнал действий',
         logsSubtitle:
@@ -511,7 +518,7 @@ const resources = {
         moderation: 'Under moderation',
         active: 'Active',
         rejected: 'Rejected',
-      
+
         notAuthenticatedTitle: 'Profile',
         notAuthenticatedText: 'You need to log in to open your profile.',
         profileBadge: 'User profile',
@@ -547,23 +554,23 @@ const resources = {
         noAccessText:
           'This page is available only to users with the moderator role.',
         backToProfile: 'Back to profile',
-      
+
         badge: 'Moderator panel',
         title: 'Listings for review',
         subtitle:
           'Here the moderator can review a listing, approve it or reject it with a reason.',
-      
+
         onReview: 'On review',
         approval: 'Approval',
         approvalText: 'The listing will appear in the catalog',
         rejection: 'Rejection',
         rejectionText: 'The listing will not be published',
-      
+
         editBadge: 'Listing review',
         editTitle: 'Edit before publishing',
         editSubtitle: 'After saving, changes will be sent to the server.',
         updateError: 'Failed to save changes. Check the data and try again.',
-      
+
         titleLabel: 'Title',
         descriptionLabel: 'Description',
         priceLabel: 'Price',
@@ -572,7 +579,7 @@ const resources = {
         roomsLabel: 'Number of rooms',
         saveChanges: 'Save changes',
         saving: 'Saving...',
-      
+
         queueBadge: 'Moderation queue',
         queueTitle: 'Needs review',
         queueSubtitle: 'These listings are waiting for the moderator decision.',
@@ -583,23 +590,23 @@ const resources = {
         emptyTitle: 'No listings for moderation',
         emptyText:
           'When users submit listings for moderation, they will appear here.',
-      
+
         statusModeration: 'Under moderation',
         selectPhoto: 'Select listing photo',
         showFull: 'Show full text',
         hideFull: 'Hide',
-      
+
         approving: 'Approving...',
         rejecting: 'Rejecting...',
         approve: 'Approve',
         reject: 'Reject',
-      
+
         rejectReasonLabel: 'Rejection reason',
         rejectReasonPlaceholder:
           'For example, not enough photos or an incorrect description',
         confirmReject: 'Confirm rejection',
         rejectError: 'Failed to reject the listing. Please try again.',
-      
+
         logsBadge: 'Moderation history',
         logsTitle: 'Action log',
         logsSubtitle: 'Recent moderator actions for listings are shown here.',
@@ -638,13 +645,111 @@ const resources = {
   },
 }
 
-i18n.use(initReactI18next).init({
-  resources,
-  lng: 'ru',
-  fallbackLng: 'ru',
-  interpolation: {
-    escapeValue: false,
-  },
+type BackendTranslationsResponse = {
+  locale: string
+  translations: Record<string, unknown>
+}
+
+type TranslationTree = {
+  [key: string]: string | TranslationTree
+}
+
+const backendTranslationLocales = ['ru', 'en'] as const
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function setNestedTranslation(
+  target: TranslationTree,
+  path: string[],
+  value: string,
+) {
+  let currentLevel = target
+
+  path.forEach((part, index) => {
+    const isLastPart = index === path.length - 1
+
+    if (isLastPart) {
+      currentLevel[part] = value
+      return
+    }
+
+    const nextLevel = currentLevel[part]
+
+    if (!isRecord(nextLevel)) {
+      currentLevel[part] = {}
+    }
+
+    currentLevel = currentLevel[part] as TranslationTree
+  })
+}
+
+function normalizeBackendTranslations(
+  translations: Record<string, unknown>,
+): TranslationTree {
+  const normalizedTranslations: TranslationTree = {}
+
+  Object.entries(translations).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      setNestedTranslation(normalizedTranslations, key.split('.'), value)
+      return
+    }
+
+    if (isRecord(value)) {
+      normalizedTranslations[key] = value as TranslationTree
+    }
+  })
+
+  return normalizedTranslations
+}
+
+async function loadBackendTranslations(locale: string) {
+  try {
+    const response = await apiClient.get<BackendTranslationsResponse>(
+      `/translations/${locale}`,
+    )
+
+    const backendTranslations = normalizeBackendTranslations(
+      response.data.translations ?? {},
+    )
+
+    if (Object.keys(backendTranslations).length === 0) {
+      return
+    }
+
+    i18n.addResourceBundle(
+      response.data.locale || locale,
+      'translation',
+      backendTranslations,
+      true,
+      true,
+    )
+  } catch {
+    // Если backend-переводы недоступны, остаются локальные переводы.
+  }
+}
+
+void i18n
+  .use(initReactI18next)
+  .init({
+    resources,
+    lng: 'ru',
+    fallbackLng: 'ru',
+    interpolation: {
+      escapeValue: false,
+    },
+  })
+  .then(() => {
+    void Promise.all(
+      backendTranslationLocales.map((locale) =>
+        loadBackendTranslations(locale),
+      ),
+    )
+  })
+
+i18n.on('languageChanged', (locale) => {
+  void loadBackendTranslations(locale)
 })
 
 export default i18n

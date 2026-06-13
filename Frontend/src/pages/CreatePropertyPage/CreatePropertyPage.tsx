@@ -1,7 +1,8 @@
 // Страница создания объявления.
 // Форма отправляет основные данные на backend endpoint /listings/add_listing.
 // Также содержит загрузку фото с preview и drag&drop.
-// Блоки инфраструктуры и инвестиций добавлены для 4 недели frontend-задач.
+// Блок инфраструктуры показывается для всех объявлений.
+// Блок инвестиций показывается только для продажи.
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -73,6 +74,8 @@ export function CreatePropertyPage() {
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<CreatePropertyFormValues, unknown, CreatePropertySubmitValues>({
     resolver: zodResolver(createPropertySchema),
     defaultValues: {
@@ -98,8 +101,46 @@ export function CreatePropertyPage() {
     },
   })
 
+  const selectedDealType = watch('type')
+
+  useEffect(() => {
+    if (selectedDealType !== 'rent') {
+      return
+    }
+
+    setValue('monthlyRent', undefined)
+    setValue('rentalYield', undefined)
+    setValue('resaleProfit', undefined)
+    setValue('investmentComment', '')
+  }, [selectedDealType, setValue])
+
   const createPropertyMutation = useMutation({
     mutationFn: async (data: CreatePropertySubmitValues) => {
+      const infrastructure = [
+        data.hasMetro ? 1 : null,
+        data.hasSchool ? 2 : null,
+        data.hasKindergarten ? 3 : null,
+        data.hasPark ? 4 : null,
+        data.hasShops ? 5 : null,
+        data.hasHospital ? 6 : null,
+      ].filter((item): item is number => item !== null)
+
+      const hasInvestmentData =
+        data.monthlyRent !== undefined ||
+        data.rentalYield !== undefined ||
+        data.resaleProfit !== undefined ||
+        Boolean(data.investmentComment?.trim())
+
+      const investment =
+        data.type === 'sale' && hasInvestmentData
+          ? {
+              annual_yield: data.rentalYield ?? 1,
+              min_investment: data.resaleProfit ?? data.monthlyRent ?? 1,
+              payback_years: 1,
+              roi: data.rentalYield ?? 1,
+            }
+          : null
+
       const createdProperty = await createProperty({
         type: data.type,
         title: data.title,
@@ -110,6 +151,8 @@ export function CreatePropertyPage() {
         address: data.address,
         status: 'moderation',
         photos: [],
+        infrastructure,
+        investment,
       })
 
       if (selectedPhotos.length > 0) {
@@ -429,112 +472,114 @@ export function CreatePropertyPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {t('createPropertyPage.investmentTitle')}
-          </h2>
+        {selectedDealType === 'sale' && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h2 className="text-lg font-semibold text-slate-900">
+              {t('createPropertyPage.investmentTitle')}
+            </h2>
 
-          <p className="mt-1 text-sm text-slate-600">
-            {t('createPropertyPage.investmentSubtitle')}
-          </p>
+            <p className="mt-1 text-sm text-slate-600">
+              {t('createPropertyPage.investmentSubtitle')}
+            </p>
 
-          <div className="mt-4 grid gap-6 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="monthlyRent"
-                className="block text-sm font-medium text-slate-700"
-              >
-                {t('createPropertyPage.monthlyRent')}
-              </label>
+            <div className="mt-4 grid gap-6 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="monthlyRent"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  {t('createPropertyPage.monthlyRent')}
+                </label>
 
-              <input
-                id="monthlyRent"
-                type="number"
-                placeholder={t('createPropertyPage.monthlyRentPlaceholder')}
-                {...register('monthlyRent', optionalNumberField)}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
-              />
+                <input
+                  id="monthlyRent"
+                  type="number"
+                  placeholder={t('createPropertyPage.monthlyRentPlaceholder')}
+                  {...register('monthlyRent', optionalNumberField)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+                />
 
-              {errors.monthlyRent && (
-                <p className="mt-2 text-sm text-red-600">
-                  {errors.monthlyRent.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="rentalYield"
-                className="block text-sm font-medium text-slate-700"
-              >
-                {t('createPropertyPage.rentalYield')}
-              </label>
-
-              <input
-                id="rentalYield"
-                type="number"
-                step="0.1"
-                placeholder={t('createPropertyPage.rentalYieldPlaceholder')}
-                {...register('rentalYield', optionalNumberField)}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-
-              {errors.rentalYield && (
-                <p className="mt-2 text-sm text-red-600">
-                  {errors.rentalYield.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="resaleProfit"
-                className="block text-sm font-medium text-slate-700"
-              >
-                {t('createPropertyPage.resaleProfit')}
-              </label>
-
-              <input
-                id="resaleProfit"
-                type="number"
-                placeholder={t('createPropertyPage.resaleProfitPlaceholder')}
-                {...register('resaleProfit', optionalNumberField)}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
-              />
-
-              {errors.resaleProfit && (
-                <p className="mt-2 text-sm text-red-600">
-                  {errors.resaleProfit.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="investmentComment"
-                className="block text-sm font-medium text-slate-700"
-              >
-                {t('createPropertyPage.investmentComment')}
-              </label>
-
-              <input
-                id="investmentComment"
-                type="text"
-                placeholder={t(
-                  'createPropertyPage.investmentCommentPlaceholder',
+                {errors.monthlyRent && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {errors.monthlyRent.message}
+                  </p>
                 )}
-                {...register('investmentComment')}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
-              />
+              </div>
 
-              {errors.investmentComment && (
-                <p className="mt-2 text-sm text-red-600">
-                  {errors.investmentComment.message}
-                </p>
-              )}
+              <div>
+                <label
+                  htmlFor="rentalYield"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  {t('createPropertyPage.rentalYield')}
+                </label>
+
+                <input
+                  id="rentalYield"
+                  type="number"
+                  step="0.1"
+                  placeholder={t('createPropertyPage.rentalYieldPlaceholder')}
+                  {...register('rentalYield', optionalNumberField)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+                />
+
+                {errors.rentalYield && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {errors.rentalYield.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="resaleProfit"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  {t('createPropertyPage.resaleProfit')}
+                </label>
+
+                <input
+                  id="resaleProfit"
+                  type="number"
+                  placeholder={t('createPropertyPage.resaleProfitPlaceholder')}
+                  {...register('resaleProfit', optionalNumberField)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+                />
+
+                {errors.resaleProfit && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {errors.resaleProfit.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="investmentComment"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  {t('createPropertyPage.investmentComment')}
+                </label>
+
+                <input
+                  id="investmentComment"
+                  type="text"
+                  placeholder={t(
+                    'createPropertyPage.investmentCommentPlaceholder',
+                  )}
+                  {...register('investmentComment')}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500"
+                />
+
+                {errors.investmentComment && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {errors.investmentComment.message}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div>
           <p className="block text-sm font-medium text-slate-700">

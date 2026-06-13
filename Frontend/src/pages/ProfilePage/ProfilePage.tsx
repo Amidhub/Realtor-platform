@@ -21,6 +21,17 @@ type EditPropertyForm = {
   rooms: number
   area: number
   address: string
+
+  hasMetro: boolean
+  hasSchool: boolean
+  hasKindergarten: boolean
+  hasPark: boolean
+  hasShops: boolean
+  hasHospital: boolean
+
+  minInvestment?: number
+  rentalYield?: number
+  paybackYears?: number
 }
 
 function formatPrice(
@@ -47,6 +58,39 @@ function getStatusClass(status: Property['status']) {
   return statusClasses[status]
 }
 
+function getOptionalNumber(value: string) {
+  return value === '' ? undefined : Number(value)
+}
+
+function getInfrastructureFromEditForm(form: EditPropertyForm) {
+  return [
+    form.hasMetro ? 1 : null,
+    form.hasSchool ? 2 : null,
+    form.hasKindergarten ? 3 : null,
+    form.hasPark ? 4 : null,
+    form.hasShops ? 5 : null,
+    form.hasHospital ? 6 : null,
+  ].filter((item): item is number => item !== null)
+}
+
+function getInvestmentFromEditForm(form: EditPropertyForm) {
+  const hasInvestmentData =
+    form.minInvestment !== undefined ||
+    form.rentalYield !== undefined ||
+    form.paybackYears !== undefined
+
+  if (!hasInvestmentData) {
+    return null
+  }
+
+  return {
+    annual_yield: form.rentalYield ?? 1,
+    min_investment: form.minInvestment ?? 1,
+    payback_years: form.paybackYears ?? 1,
+    roi: form.rentalYield ?? 1,
+  }
+}
+
 const fallbackPhoto =
   'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80'
 
@@ -66,10 +110,13 @@ function PropertyPhotoGallery({
   const photos = getPropertyPhotos(property)
   const [selectedPhoto, setSelectedPhoto] = useState(photos[0])
 
+  const currentPhoto =
+    selectedPhoto && photos.includes(selectedPhoto) ? selectedPhoto : photos[0]
+
   return (
     <div className="bg-slate-50">
       <img
-        src={selectedPhoto}
+        src={currentPhoto}
         alt={property.title}
         className="h-48 w-full object-cover"
       />
@@ -83,7 +130,7 @@ function PropertyPhotoGallery({
               onClick={() => setSelectedPhoto(photo)}
               className={[
                 'h-14 overflow-hidden rounded-lg border transition',
-                selectedPhoto === photo
+                currentPhoto === photo
                   ? 'border-blue-600 ring-2 ring-blue-100'
                   : 'border-transparent hover:border-slate-300',
               ].join(' ')}
@@ -107,6 +154,17 @@ function getEditFormFromProperty(property: Property): EditPropertyForm {
     rooms: property.rooms,
     area: property.area,
     address: property.address,
+
+    hasMetro: Boolean(property.infrastructure?.metro),
+    hasSchool: Boolean(property.infrastructure?.school),
+    hasKindergarten: Boolean(property.infrastructure?.kindergarten),
+    hasPark: Boolean(property.infrastructure?.park),
+    hasShops: Boolean(property.infrastructure?.shop),
+    hasHospital: Boolean(property.infrastructure?.hospital),
+
+    minInvestment: property.investment?.minInvestment,
+    rentalYield: property.investment?.profitability,
+    paybackYears: property.investment?.paybackYears,
   }
 }
 
@@ -159,6 +217,9 @@ export function ProfilePage() {
     null,
   )
   const [editForm, setEditForm] = useState<EditPropertyForm | null>(null)
+  const [deletingPropertyId, setDeletingPropertyId] = useState<number | null>(
+    null,
+  )
 
   const {
     data: myProperties = [],
@@ -179,20 +240,53 @@ export function ProfilePage() {
       data: EditPropertyForm
     }) =>
       updateProperty(propertyId, {
-        ...data,
+        type: data.type,
+        title: data.title,
+        description: data.description,
+        price: data.price,
+        rooms: data.rooms,
+        area: data.area,
+        address: data.address,
         status: 'moderation',
+        infrastructure: getInfrastructureFromEditForm(data),
+        investment: getInvestmentFromEditForm(data),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-properties'] })
+      queryClient.invalidateQueries({ queryKey: ['catalog-properties'] })
+      queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
       setEditingPropertyId(null)
       setEditForm(null)
+    },
+    onError: () => {
+      alert('Не удалось обновить объявление. Попробуйте ещё раз.')
     },
   })
 
   const deletePropertyMutation = useMutation({
-    mutationFn: deleteProperty,
-    onSuccess: () => {
+    mutationFn: async (propertyId: number) => {
+      await deleteProperty(propertyId)
+      return propertyId
+    },
+    onMutate: (propertyId) => {
+      setDeletingPropertyId(propertyId)
+    },
+    onSuccess: (deletedPropertyId) => {
+      queryClient.setQueryData<Property[]>(
+        ['my-properties'],
+        (currentProperties = []) =>
+          currentProperties.filter(
+            (property) => property.id !== deletedPropertyId,
+          ),
+      )
+
       queryClient.invalidateQueries({ queryKey: ['my-properties'] })
+    },
+    onError: () => {
+      alert('Не удалось удалить объявление. Попробуйте ещё раз.')
+    },
+    onSettled: () => {
+      setDeletingPropertyId(null)
     },
   })
 
@@ -451,6 +545,160 @@ export function ProfilePage() {
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
               />
             </div>
+
+            <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-lg font-semibold text-slate-900">
+                Инфраструктура рядом
+              </h3>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasMetro}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasMetro: event.target.checked,
+                      })
+                    }
+                  />
+                  Метро / остановка рядом
+                </label>
+
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasSchool}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasSchool: event.target.checked,
+                      })
+                    }
+                  />
+                  Школа
+                </label>
+
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasKindergarten}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasKindergarten: event.target.checked,
+                      })
+                    }
+                  />
+                  Детский сад
+                </label>
+
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasPark}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasPark: event.target.checked,
+                      })
+                    }
+                  />
+                  Парк
+                </label>
+
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasShops}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasShops: event.target.checked,
+                      })
+                    }
+                  />
+                  Магазины
+                </label>
+
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasHospital}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        hasHospital: event.target.checked,
+                      })
+                    }
+                  />
+                  Больница / поликлиника
+                </label>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-lg font-semibold text-slate-900">
+                Инвестиционная информация
+              </h3>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Минимальная инвестиция, ₽
+                  </label>
+
+                  <input
+                    type="number"
+                    value={editForm.minInvestment ?? ''}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        minInvestment: getOptionalNumber(event.target.value),
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Доходность, % годовых
+                  </label>
+
+                  <input
+                    type="number"
+                    value={editForm.rentalYield ?? ''}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        rentalYield: getOptionalNumber(event.target.value),
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Окупаемость, лет
+                  </label>
+
+                  <input
+                    type="number"
+                    value={editForm.paybackYears ?? ''}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        paybackYears: getOptionalNumber(event.target.value),
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -602,10 +850,10 @@ export function ProfilePage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteProperty(property.id)}
-                        disabled={deletePropertyMutation.isPending}
+                        disabled={deletingPropertyId === property.id}
                         className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {deletePropertyMutation.isPending
+                        {deletingPropertyId === property.id
                           ? t('profile.deleting')
                           : t('common.delete')}
                       </button>

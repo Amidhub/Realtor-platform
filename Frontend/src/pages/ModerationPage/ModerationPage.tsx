@@ -123,7 +123,9 @@ export function ModerationPage() {
   const { t, i18n } = useTranslation()
 
   const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
-  const isModerator = isAuthenticated && user?.role === 'moderator'
+  const userRole = user?.role as string | undefined
+  const isModerator =
+    isAuthenticated && (userRole === 'moderator' || userRole === 'admin')
 
   const [rejectingPropertyId, setRejectingPropertyId] = useState<number | null>(
     null,
@@ -150,13 +152,23 @@ export function ModerationPage() {
     enabled: isModerator,
   })
 
+  const refreshModerationData = () => {
+    queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
+    queryClient.invalidateQueries({ queryKey: ['moderation-logs'] })
+    queryClient.invalidateQueries({ queryKey: ['catalog-properties'] })
+    queryClient.invalidateQueries({ queryKey: ['my-properties'] })
+    queryClient.invalidateQueries({ queryKey: ['property'] })
+  }
+
   const approvePropertyMutation = useMutation({
     mutationFn: approveProperty,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
-      queryClient.invalidateQueries({ queryKey: ['moderation-logs'] })
+      refreshModerationData()
       setRejectingPropertyId(null)
       setRejectReason('')
+    },
+    onError: () => {
+      alert('Не удалось одобрить объявление. Попробуйте ещё раз.')
     },
   })
 
@@ -169,10 +181,12 @@ export function ModerationPage() {
       reason: string
     }) => rejectProperty(propertyId, reason),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['moderation-properties'] })
-      queryClient.invalidateQueries({ queryKey: ['moderation-logs'] })
+      refreshModerationData()
       setRejectingPropertyId(null)
       setRejectReason('')
+    },
+    onError: () => {
+      alert('Не удалось отклонить объявление. Попробуйте ещё раз.')
     },
   })
 

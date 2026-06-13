@@ -11,6 +11,20 @@ import type {
   Property,
 } from '../types/property'
 
+type BackendInfrastructure =
+  | number[]
+  | Property['infrastructure']
+  | null
+  | undefined
+
+type BackendInvestment = {
+    roi?: number | null
+    annual_yield?: number | null
+    payback_years?: number | null
+    min_investment?: number | null
+    risk_level?: 'low' | 'medium' | 'high' | null
+  } | null | undefined
+
 type BackendListing = {
   id: number
   type: DealType
@@ -22,6 +36,10 @@ type BackendListing = {
   address: string
   status: ListingStatus
   photos?: string[]
+  infrastructure?: BackendInfrastructure
+  investment?: BackendInvestment
+  latitude?: number | null
+  longitude?: number | null
   created_at: string
   updated_at?: string
   user_id?: number
@@ -90,6 +108,67 @@ function extractBackendListings(data: BackendListingsData) {
   return data.listings
 }
 
+function mapInfrastructureToProperty(
+  infrastructure: BackendInfrastructure,
+): Property['infrastructure'] | undefined {
+  if (!infrastructure) {
+    return undefined
+  }
+
+  if (!Array.isArray(infrastructure)) {
+    const hasInfrastructureValues = Object.values(infrastructure).some(Boolean)
+
+    return hasInfrastructureValues ? infrastructure : undefined
+  }
+
+  const infrastructureIds = infrastructure.map(Number)
+
+  if (infrastructureIds.length === 0) {
+    return undefined
+  }
+
+  const mappedInfrastructure = {
+    metro: infrastructureIds.includes(1) ? 'Есть рядом' : undefined,
+    school: infrastructureIds.includes(2) ? 'Есть рядом' : undefined,
+    kindergarten: infrastructureIds.includes(3) ? 'Есть рядом' : undefined,
+    park: infrastructureIds.includes(4) ? 'Есть рядом' : undefined,
+    shop: infrastructureIds.includes(5) ? 'Есть рядом' : undefined,
+    hospital: infrastructureIds.includes(6) ? 'Есть рядом' : undefined,
+  }
+
+  const hasInfrastructureValues =
+    Object.values(mappedInfrastructure).some(Boolean)
+
+  return hasInfrastructureValues ? mappedInfrastructure : undefined
+}
+
+function mapInvestmentToProperty(
+  investment: BackendInvestment,
+): Property['investment'] | undefined {
+  if (!investment) {
+    return undefined
+  }
+
+  const riskLevelLabels: Record<'low' | 'medium' | 'high', string> = {
+    low: 'Низкий риск',
+    medium: 'Средний риск',
+    high: 'Высокий риск',
+  }
+
+  const mappedInvestment = {
+    paybackYears: investment.payback_years ?? undefined,
+    profitability: investment.annual_yield ?? investment.roi ?? undefined,
+    minInvestment: investment.min_investment ?? undefined,
+    priceGrowth: investment.risk_level
+      ? riskLevelLabels[investment.risk_level]
+      : undefined,
+  }
+
+  const hasInvestmentValues = Object.values(mappedInvestment).some(Boolean)
+
+  return hasInvestmentValues ? mappedInvestment : undefined
+}
+
 function mapBackendListingToProperty(listing: BackendListing): Property {
   return {
     id: listing.id,
@@ -102,6 +181,10 @@ function mapBackendListingToProperty(listing: BackendListing): Property {
     address: listing.address,
     status: listing.status,
     photos: listing.photos?.map(getPhotoUrl) ?? [],
+    infrastructure: mapInfrastructureToProperty(listing.infrastructure),
+    investment: mapInvestmentToProperty(listing.investment),
+    latitude: listing.latitude,
+    longitude: listing.longitude,
     created_at: listing.created_at,
   }
 }
@@ -120,8 +203,16 @@ export async function getProperties(params: GetPropertiesParams = {}) {
   }
 }
 
+type CreatePropertyResponse = {
+  id: number
+  message?: string
+}
+
 export async function createProperty(data: CreatePropertyRequest) {
-  const response = await apiClient.post<Property>('/listings/add_listing', data)
+  const response = await apiClient.post<CreatePropertyResponse>(
+    '/listings/add_listing',
+    data,
+  )
 
   return response.data
 }
@@ -166,13 +257,34 @@ export async function getMyProperties() {
   return extractBackendListings(response.data).map(mapBackendListingToProperty)
 }
 
-export async function getMyProperty(propertyId: number) {
-  const response = await apiClient.get<BackendListing>(
-    `/listings/show/${propertyId}`,
+type BackendSingleListingResponse =
+  | BackendListing
+  | {
+      listing: BackendListing
+    }
+
+function extractSingleBackendListing(data: BackendSingleListingResponse) {
+  if ('listing' in data) {
+    return data.listing
+  }
+
+  return data
+}
+
+export async function getPropertyById(propertyId: number) {
+  const response = await apiClient.get<BackendSingleListingResponse>(
+    '/listings/get_listing',
+    {
+      params: {
+        listing_id: propertyId,
+      },
+    },
   )
 
-  return mapBackendListingToProperty(response.data)
+  return mapBackendListingToProperty(extractSingleBackendListing(response.data))
 }
+
+export const getMyProperty = getPropertyById
 
 export async function updateProperty(
   propertyId: number,
@@ -207,12 +319,10 @@ export async function approveProperty(propertyId: number) {
   return response.data
 }
 
-export async function rejectProperty(propertyId: number, reason: string) {
+export async function rejectProperty(propertyId: number, reason?: string) {
   const response = await apiClient.patch(
     `/listings/moderation/${propertyId}/reject`,
-    {
-      reason,
-    },
+    reason ? { reason } : undefined,
   )
 
   return response.data
@@ -258,4 +368,34 @@ export async function getModeratorModerationLogs(moderatorId: number) {
   )
 
   return extractModerationLogs(response.data)
+}
+
+export type NearbyPropertiesParams = {
+  lat: number
+  lon: number
+  radius_km?: number
+}
+
+type BackendNearbyListingsResponse = {
+  center: {
+    lat: number
+    lon: number
+  }
+  radius_km: number
+  listings: BackendListing[]
+  count: number
+}
+
+export async function getNearbyProperties(params: NearbyPropertiesParams) {
+  const response = await apiClient.get<BackendNearbyListingsResponse>(
+    '/listings/nearby',
+    {
+      params,
+    },
+  )
+
+  return {
+    ...response.data,
+    list_listings: response.data.listings.map(mapBackendListingToProperty),
+  }
 }

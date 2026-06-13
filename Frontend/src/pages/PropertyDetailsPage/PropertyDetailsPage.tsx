@@ -1,12 +1,50 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
+import { getPropertyById } from '../../api/propertiesApi'
 import { mockProperties } from '../../data/mockProperties'
+
+const fallbackPhoto =
+  'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80'
 
 export function PropertyDetailsPage() {
   const { id } = useParams()
   const { t, i18n } = useTranslation()
 
-  const property = mockProperties.find((item) => item.id === Number(id))
+  const propertyId = Number(id)
+  const isValidPropertyId = Number.isFinite(propertyId) && propertyId > 0
+
+  const fallbackProperty = mockProperties.find(
+    (item) => item.id === propertyId,
+  )
+
+  const propertyQuery = useQuery({
+    queryKey: ['property', propertyId],
+    queryFn: () => getPropertyById(propertyId),
+    enabled: isValidPropertyId,
+    retry: 1,
+  })
+
+  const property = propertyQuery.data ?? fallbackProperty
+
+  const photos =
+  property && property.photos.length > 0 ? property.photos : [fallbackPhoto]
+
+const firstPhoto = photos[0] ?? fallbackPhoto
+
+const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
+
+const currentPhoto =
+  selectedPhoto && photos.includes(selectedPhoto) ? selectedPhoto : firstPhoto
+
+  if (isValidPropertyId && propertyQuery.isPending && !fallbackProperty) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <p className="text-slate-600">{t('common.loading')}</p>
+      </main>
+    )
+  }
 
   if (!property) {
     return (
@@ -25,8 +63,96 @@ export function PropertyDetailsPage() {
     )
   }
 
-  const mainPhoto = property.photos[0]
   const locale = i18n.language === 'en' ? 'en-US' : 'ru-RU'
+
+  const formattedPrice =
+    property.type === 'rent'
+      ? `${property.price.toLocaleString(locale)} ₽/${t('property.perMonth')}`
+      : `${property.price.toLocaleString(locale)} ₽`
+
+  const infrastructureItems = property.infrastructure
+    ? [
+        property.infrastructure.metro
+          ? {
+              title: t('property.transport'),
+              value: property.infrastructure.metro,
+            }
+          : null,
+        property.infrastructure.school
+          ? {
+              title: t('property.school'),
+              value: property.infrastructure.school,
+            }
+          : null,
+        property.infrastructure.kindergarten
+          ? {
+              title: t('property.kindergarten'),
+              value: property.infrastructure.kindergarten,
+            }
+          : null,
+        property.infrastructure.shop
+          ? {
+              title: t('property.shops'),
+              value: property.infrastructure.shop,
+            }
+          : null,
+        property.infrastructure.hospital
+          ? {
+              title: t('property.medicine'),
+              value: property.infrastructure.hospital,
+            }
+          : null,
+        property.infrastructure.park
+          ? {
+              title: t('property.parks'),
+              value: property.infrastructure.park,
+            }
+          : null,
+      ].filter((item): item is InfoItemProps => item !== null)
+    : []
+
+  const investmentItems = property.investment
+    ? [
+        typeof property.investment.monthlyRent === 'number'
+          ? {
+              title: t('property.averageRent'),
+              value: `${property.investment.monthlyRent.toLocaleString(
+                locale,
+              )} ₽/${t('property.perMonth')}`,
+            }
+          : null,
+        typeof property.investment.minInvestment === 'number'
+          ? {
+              title: 'Минимальная инвестиция',
+              value: `${property.investment.minInvestment.toLocaleString(
+                locale,
+              )} ₽`,
+            }
+          : null,
+        typeof property.investment.paybackYears === 'number'
+          ? {
+              title: t('property.payback'),
+              value: `${property.investment.paybackYears} ${t(
+                'property.years',
+              )}`,
+            }
+          : null,
+        typeof property.investment.profitability === 'number'
+          ? {
+              title: t('property.profitability'),
+              value: `${property.investment.profitability}% ${t(
+                'property.perYear',
+              )}`,
+            }
+          : null,
+        property.investment.priceGrowth
+          ? {
+              title: t('property.potential'),
+              value: property.investment.priceGrowth,
+            }
+          : null,
+      ].filter((item): item is InfoItemProps => item !== null)
+    : []
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -37,21 +163,35 @@ export function PropertyDetailsPage() {
       <section className="mt-6 grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div>
           <img
-            src={mainPhoto}
+            src={currentPhoto}
             alt={property.title}
-            className="h-[420px] w-full rounded-2xl object-cover"
+            className="h-[280px] w-full rounded-2xl object-cover sm:h-[420px]"
           />
 
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {property.photos.slice(1).map((photo) => (
-              <img
-                key={photo}
-                src={photo}
-                alt={property.title}
-                className="h-28 w-full rounded-xl object-cover"
-              />
-            ))}
-          </div>
+          {photos.length > 1 && (
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {photos.map((photo) => (
+                <button
+                  key={photo}
+                  type="button"
+                  onClick={() => setSelectedPhoto(photo)}
+                  className={[
+                    'h-24 overflow-hidden rounded-xl border transition sm:h-28',
+                    currentPhoto === photo
+                      ? 'border-blue-600 ring-2 ring-blue-100'
+                      : 'border-transparent hover:border-slate-300',
+                  ].join(' ')}
+                  aria-label="Выбрать фото объекта"
+                >
+                  <img
+                    src={photo}
+                    alt={property.title}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -64,7 +204,7 @@ export function PropertyDetailsPage() {
           </h1>
 
           <p className="mt-4 text-3xl font-bold text-blue-600">
-            {property.price.toLocaleString(locale)} ₽
+            {formattedPrice}
           </p>
 
           <p className="mt-4 text-slate-600">{property.address}</p>
@@ -91,101 +231,42 @@ export function PropertyDetailsPage() {
         <h2 className="text-2xl font-bold text-slate-900">
           {t('property.description')}
         </h2>
+
         <p className="mt-4 leading-7 text-slate-700">{property.description}</p>
       </section>
 
-      {property.infrastructure && (
+      {infrastructureItems.length > 0 && (
         <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold text-slate-900">
             {t('property.infrastructure')}
           </h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {property.infrastructure.metro && (
+            {infrastructureItems.map((item) => (
               <InfoItem
-                title={t('property.transport')}
-                value={property.infrastructure.metro}
+                key={item.title}
+                title={item.title}
+                value={item.value}
               />
-            )}
-
-            {property.infrastructure.school && (
-              <InfoItem
-                title={t('property.school')}
-                value={property.infrastructure.school}
-              />
-            )}
-
-            {property.infrastructure.kindergarten && (
-              <InfoItem
-                title={t('property.kindergarten')}
-                value={property.infrastructure.kindergarten}
-              />
-            )}
-
-            {property.infrastructure.shop && (
-              <InfoItem
-                title={t('property.shops')}
-                value={property.infrastructure.shop}
-              />
-            )}
-
-            {property.infrastructure.hospital && (
-              <InfoItem
-                title={t('property.medicine')}
-                value={property.infrastructure.hospital}
-              />
-            )}
-
-            {property.infrastructure.park && (
-              <InfoItem
-                title={t('property.parks')}
-                value={property.infrastructure.park}
-              />
-            )}
+            ))}
           </div>
         </section>
       )}
 
-      {property.investment && (
+      {investmentItems.length > 0 && (
         <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold text-slate-900">
             {t('property.investment')}
           </h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-4">
-            {property.investment.monthlyRent && (
+            {investmentItems.map((item) => (
               <InfoItem
-                title={t('property.averageRent')}
-                value={`${property.investment.monthlyRent.toLocaleString(
-                  locale,
-                )} ₽/${t('property.perMonth')}`}
+                key={item.title}
+                title={item.title}
+                value={item.value}
               />
-            )}
-
-            {property.investment.paybackYears && (
-              <InfoItem
-                title={t('property.payback')}
-                value={`${property.investment.paybackYears} ${t(
-                  'property.years',
-                )}`}
-              />
-            )}
-
-            {property.investment.profitability && (
-              <InfoItem
-                title={t('property.profitability')}
-                value={`${property.investment.profitability}% ${t(
-                  'property.perYear',
-                )}`}
-              />
-            )}
-
-            {property.investment.priceGrowth && (
-              <InfoItem
-                title={t('property.potential')}
-                value={property.investment.priceGrowth}
-              />
-            )}
+            ))}
           </div>
         </section>
       )}
