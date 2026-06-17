@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.database import Base, DATABASE_URL
 from src.user.model import User
 from src.listings.models import Listing
+from src.chat.models import Message, Conversation
 
 config = context.config
 

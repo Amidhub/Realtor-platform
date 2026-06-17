@@ -8,13 +8,11 @@ from src.database import engine
 
 from src.auth.router import router as auth_router
 from src.listings.router import router as listing_router
+from src.chat.router import router as chat_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Управление жизненным циклом приложения.
-    Здесь инициализируются и закрываются ресурсы.
-    """
     # Startup
     print(f"Starting {setting.PROJECT_NAME} in {setting.MODE} mode")
     
@@ -26,7 +24,6 @@ async def lifespan(app: FastAPI):
     print("Resources cleaned up")
 
 
-# Создание приложения
 app = FastAPI(
     title=setting.PROJECT_NAME,
     # version=setting.VERSION,
@@ -50,6 +47,7 @@ app.add_middleware(
 # Подключение роутеров
 app.include_router(auth_router)
 app.include_router(listing_router)
+app.include_router(chat_router)
 
 
 # Корневой эндпоинт

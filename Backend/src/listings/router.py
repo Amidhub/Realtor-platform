@@ -6,7 +6,7 @@ from src.listings.dao import ListingDAO
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
-from src.auth.dependencise import get_current_user
+from src.auth.dependencies import get_current_user
 
 from src.listings.schemas import FullListing_S, Listing_S, PaginationResponse_S
 
