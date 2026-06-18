@@ -54,8 +54,8 @@ async def add_listing(
         photos=[],
         infrastructure=data.infrastructure or [],
         investment=investment_dict,
-        latitude=None,
-        longitude=None
+        latitude=latitude,
+        longitude=longitude
     )
     
     return {"id": listing.id, "message": "Объявление создано, теперь загрузите фото"}

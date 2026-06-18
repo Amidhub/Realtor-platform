@@ -34,9 +34,11 @@ async def get_or_create_conversation(
     if not listing:
         raise HTTPException(404, "Listing not found")
     
-    
     if user.id == listing.user_id:
         raise HTTPException(400, "You cannot chat with yourself")
+    
+    if listing.status!="active":
+        raise HTTPException(404, "The listing is not active")
     
     conversation = await ChatDAO.get_or_create_conversation(
         db,
