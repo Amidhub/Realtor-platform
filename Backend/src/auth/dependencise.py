@@ -71,3 +71,8 @@ def get_current_moderator(user: User = Depends(get_current_user)):
     if user.role != "moderator":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="недостаточно прав")
     return user
+
+def check_agreement(user: User = Depends(get_current_user)):
+    if not user.consent_given:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="нет согласия на сбор персональных данных")
+    return user

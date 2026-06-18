@@ -3,7 +3,7 @@ import enum
 from typing import Annotated
 
 from src.database import Base
-from sqlalchemy import Integer, JSON, Column, String, text
+from sqlalchemy import Boolean, Integer, JSON, Column, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -26,3 +26,7 @@ class User(Base):
     refresh_token: Mapped[str512] = mapped_column(nullable=True)
     role: Mapped[Role] = mapped_column(String(20), default="user")
     created_at: Mapped[created_at]
+    
+    consent_given: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    consent_date: Mapped[created_at]
+    consent_version: Mapped[str] = mapped_column(String(20), nullable=True)

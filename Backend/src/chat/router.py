@@ -16,7 +16,7 @@ from src.chat.schemas import (
     WSResponse
 )
 from src.chat.manager import manager
-from src.auth.dependencise import get_current_user
+from src.auth.dependencise import check_agreement, get_current_user
 
 from src.listings.models import Listing
 
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 @router.get("/conversations/by-listing/{listing_id}")
 async def get_or_create_conversation(
     listing_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
     db: AsyncSession = Depends(get_session)
 ):
     
@@ -57,7 +57,7 @@ async def get_or_create_conversation(
 async def get_my_conversations(
     limit: int = 50,
     offset: int = 0,
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
     db: AsyncSession = Depends(get_session)
 ):
     conversations = await ChatDAO.get_user_conversations(db, user.id, limit, offset)
@@ -84,7 +84,7 @@ async def get_conversation_messages(
     conversation_id: int,
     limit: int = 50,
     offset: int = 0,
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
     db: AsyncSession = Depends(get_session)
 ):
     """Получить историю сообщений"""
@@ -98,7 +98,7 @@ async def get_conversation_messages(
 
 @router.get("/unread-count")
 async def get_unread_count(
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
     db: AsyncSession = Depends(get_session)
 ):
     """Количество непрочитанных сообщений"""

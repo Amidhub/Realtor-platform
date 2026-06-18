@@ -7,7 +7,7 @@ from src.database import get_session
 
 from src.auth.schemas import UserAuth_S
 
-from src.auth.dependencise import get_current_user, verify_refresh_token, get_token
+from src.auth.dependencise import check_agreement, get_current_user, verify_refresh_token, get_token
 from src.user.model import User
 
 
@@ -19,6 +19,9 @@ router = APIRouter(
 
 @router.post("/register")
 async def register(data: UserAuth_S, db: AsyncSession = Depends(get_session)):
+    if not data.agreement:
+        raise HTTPException(400, "No agreement")
+    
     user_dao = UserDAO(db)
     is_exist= await user_dao.get_one_or_none(email=data.email)
     
@@ -89,10 +92,11 @@ async def logout(response: Response, db: AsyncSession = Depends(get_session), us
 
 
 @router.get("/me")
-async def me(user: User = Depends(get_current_user)):
+async def me(user: User = Depends(check_agreement)):
     return user
 
 
 @router.get("/token_curr_user")
 async def token_curr_user(token: str = Depends(get_token)):
     return {"token": token}
+

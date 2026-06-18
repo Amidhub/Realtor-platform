@@ -3,7 +3,7 @@ from typing import Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.auth.dependencise import get_current_user
+from src.auth.dependencise import get_current_moderator, get_current_user
 from src.user.model import User
 from src.translations.dao import TranslationDAO
 from src.translations.schemas import (
@@ -67,14 +67,8 @@ async def get_translation(
 async def create_translation(
     data: Translation_S,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ) -> TranslationResponse_S:
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Недостаточно прав"
-        )
-    
     translation_dao = TranslationDAO(db)
 
     existing = await translation_dao.get_by_key_and_locale(data.key, data.locale)
@@ -92,19 +86,14 @@ async def create_translation(
 
     return translation
 
+
 @router.put("/{id}")
 async def update_translation(
     id: int,
     value: str,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ) -> TranslationResponse_S:
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Недостаточно прав"
-        )
-    
     translation_dao = TranslationDAO(db)
 
     translation = await translation_dao.get_one_by_id(id)
@@ -124,14 +113,8 @@ async def update_translation(
 async def upsert_translations_batch(
     data: TranslationBatch_S,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ):
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Недостаточно прав"
-        )
-    
     translation_dao = TranslationDAO(db)
     await translation_dao.upsert_batch(data.locale, data.translations)
 
@@ -142,14 +125,8 @@ async def delete_translation(
     locale: str,
     key: str,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ):
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Недостаточно прав"
-        )
-    
     translation_dao = TranslationDAO(db)
     deleted = await translation_dao.delete_by_key(key, locale)
 
@@ -160,8 +137,3 @@ async def delete_translation(
         )
     
     return {"message": f"Translation '{key}' deleted succesfully"}
-
-
-    
-    
-

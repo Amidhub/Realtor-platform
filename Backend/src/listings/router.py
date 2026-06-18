@@ -7,7 +7,7 @@ from src.listings.schemas import FullListing_S, Listing_S, PaginationResponse_S,
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
-from src.auth.dependencise import get_current_user
+from src.auth.dependencise import check_agreement, get_current_moderator, get_current_user
 
 from src.user.model import User
 
@@ -29,7 +29,7 @@ router = APIRouter(
 async def add_listing(
     data: Listing_S,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
 ):
     listing_dao = ListingDAO(db)
     geocoding_service = GeocodingService()
@@ -66,7 +66,7 @@ async def add_listing_photos(
     listing_id: int,
     uploaded_files: list[UploadFile],
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+    user: User = Depends(check_agreement),
     s3_client: S3Client = Depends(get_s3_client),
 ):
     listing_dao = ListingDAO(db)
@@ -145,7 +145,7 @@ async def get_listing(
 @router.get("/show")
 async def show_user_listings(
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(check_agreement)
 ):
     listings_dao = ListingDAO(db)
     listings = await listings_dao.get_all(
@@ -169,7 +169,7 @@ async def show_user_listings(
 async def show_single_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(check_agreement)
 ):
     listing_dao = ListingDAO(db)
 
@@ -191,7 +191,7 @@ async def partial_update_listing(
     listing_id: int,
     data: ListingUpdate_S,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(check_agreement)
 ):
     listing_dao = ListingDAO(db)
 
@@ -237,7 +237,7 @@ async def partial_update_listing(
 async def delete_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(check_agreement)
 ):
     listing_dao = ListingDAO(db)
 
@@ -257,14 +257,8 @@ async def delete_listing(
 @router.get("/moderation")
 async def get_moderation_listings(
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
-):
-    if user.role not in ["admin", "moderator"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="У вас нет прав для просмотра объявлений на модерации"
-        )
-    
+    user: User = Depends(get_current_moderator)
+):    
     listing_dao = ListingDAO(db)
     listings = await listing_dao.get_all(status="moderation")
 
@@ -285,11 +279,8 @@ async def get_moderation_listings(
 async def approve_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ):
-    if user.role != "moderator":
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
     listing_dao = ListingDAO(db)
     log_dao = ModerationLogDAO(db)
     listing = await listing_dao.get_one_or_none(id=listing_id)
@@ -319,12 +310,9 @@ async def approve_listing(
 async def reject_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_moderator),
     reason: Optional[str] = Body(None, embed=True, max_length=500)
 ):
-    if user.role != "moderator":
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
     listing_dao = ListingDAO(db)
     log_dao = ModerationLogDAO(db)
     listing = await listing_dao.get_one_or_none(id=listing_id)
@@ -348,19 +336,15 @@ async def reject_listing(
     )
 
     return {"message": "Объявление отклонено", "listing_id": listing_id}
+
+
 @router.get("/moderation/logs")
 async def get_moderation_logs(
     listing_id: Optional[int] = None,
 
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ):
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="У вас нет прав для просмотра логов модерации"
-        )
-    
     log_dao = ModerationLogDAO(db)
 
     filters = {}
@@ -379,14 +363,8 @@ async def get_moderation_logs(
 async def get_moderator_logs(
     moderator_id: int,
     db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_moderator)
 ):
-    if user.role != "moderator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="У вас нет прав для просмотра логов модерации"
-        )
-    
     log_dao = ModerationLogDAO(db)
     logs = await log_dao.get_all(
         moderator_id=moderator_id
