@@ -13,6 +13,8 @@ from src.database import Base, DATABASE_URL
 from src.user.model import User
 from src.listings.models import Listing
 from src.chat.models import Message, Conversation
+from src.translations.models import Translation
+from src.config import setting
 
 config = context.config
 
@@ -35,6 +37,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+print(f"Connection URL: {config.get_main_option('sqlalchemy.url')}")
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),

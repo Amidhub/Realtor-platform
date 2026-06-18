@@ -31,6 +31,8 @@ class Setting(BaseSettings):
     SECRET_KEY_S3: str
     ENDPOINT_URl_S3: str
     BUCKET_NAME_S3: str
+
+    EMAIL: str
     
     class Config:
         env_file = ".env"

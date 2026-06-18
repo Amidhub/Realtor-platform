@@ -9,14 +9,15 @@ from src.database import engine
 from src.auth.router import router as auth_router
 from src.listings.router import router as listing_router
 from src.chat.router import router as chat_router
-
+from src.user.router import router as user_router
+from src.translations.router import router as translations_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting {setting.PROJECT_NAME} in {setting.MODE} mode")
     
-    yield  # App running
+    yield
     
     # Shutdown
     print("Shutting down...")
@@ -48,7 +49,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(listing_router)
 app.include_router(chat_router)
-
+app.include_router(user_router)
+app.include_router(translations_router)
 
 # Корневой эндпоинт
 @app.get("/", tags=["health"])
