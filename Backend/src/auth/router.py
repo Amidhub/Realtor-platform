@@ -5,7 +5,7 @@ from src.auth.dao import UserDAO
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
 
-from src.auth.schemas import UserAuth_S
+from src.auth.schemas import UserAuth_S, UserReg_S
 
 from src.auth.dependencise import check_agreement, get_current_user, verify_refresh_token, get_token
 from src.user.model import User
@@ -18,7 +18,7 @@ router = APIRouter(
 
 
 @router.post("/register")
-async def register(data: UserAuth_S, db: AsyncSession = Depends(get_session)):
+async def register(data: UserReg_S, db: AsyncSession = Depends(get_session)):
     if not data.agreement:
         raise HTTPException(400, "No agreement")
     
@@ -29,7 +29,7 @@ async def register(data: UserAuth_S, db: AsyncSession = Depends(get_session)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT)
     
     hashed_password=get_password_hash(data.password)
-    await user_dao.add(email=data.email, hashed_password=hashed_password)
+    await user_dao.add(email=data.email, hashed_password=hashed_password, consent_given = data.agreement)
     return {"inf":"OK200"}
 
 

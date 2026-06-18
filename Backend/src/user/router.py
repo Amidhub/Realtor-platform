@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from src.listings.dao import ListingDAO
 
@@ -54,23 +56,26 @@ async def change_user_role(
     }
     
     
-@router.patch("/users/{user_id}/change_agreement")
-async def change_user_role(
-    user_id: int,
+@router.patch("/me/change_agreement")
+async def change_my_agreement(
     agreement: bool,
     db: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user)
 ):
     user_dao = UserDAO(db)
     
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден"
-        )
+    await user_dao.update(
+        id=user.id,
+        consent_given=agreement,
+        consent_date=datetime.utcnow() if agreement else None,
+        consent_version="1.0" if agreement else None
+    )
     
-    await user_dao.update(id=user_id, consent_given=agreement, consent_date=None, consent_version=None)
-    
-    return {
-        "inf": f"Согласие пользователя {user.email} успешно изменена на {agreement}",
-    }
+    return {"message": "Согласие обновлено"}
+
+
+@router.delete("/delete")
+async def delete(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    user_dao = UserDAO(db)
+    await user_dao.delete(user.id)
+    return {"inf": "OK"}

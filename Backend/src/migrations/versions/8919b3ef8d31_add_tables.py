@@ -1,8 +1,8 @@
 """add tables
 
-Revision ID: 7e306676dc24
+Revision ID: 8919b3ef8d31
 Revises: 
-Create Date: 2026-06-17 22:15:49.811115
+Create Date: 2026-06-18 17:19:09.261758
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '7e306676dc24'
+revision: str = '8919b3ef8d31'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -40,6 +40,9 @@ def upgrade() -> None:
     sa.Column('refresh_token', sa.String(length=512), nullable=True),
     sa.Column('role', sa.String(length=20), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text("TIMEZONE('utc', now())"), nullable=False),
+    sa.Column('consent_given', sa.Boolean(), nullable=False),
+    sa.Column('consent_date', sa.DateTime(), server_default=sa.text("TIMEZONE('utc', now())"), nullable=False),
+    sa.Column('consent_version', sa.String(length=20), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('listings',

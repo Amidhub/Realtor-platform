@@ -28,5 +28,5 @@ class User(Base):
     created_at: Mapped[created_at]
     
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    consent_date: Mapped[created_at]
+    consent_date: Mapped[created_at] = mapped_column(nullable=True)
     consent_version: Mapped[str] = mapped_column(String(20), nullable=True)
