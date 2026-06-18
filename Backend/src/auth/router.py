@@ -7,7 +7,7 @@ from src.database import get_session
 
 from src.auth.schemas import UserAuth_S
 
-from src.auth.dependencies import get_current_user, verify_refresh_token, get_token
+from src.auth.dependencise import get_current_user, verify_refresh_token, get_token
 from src.user.model import User
 
 
@@ -93,6 +93,6 @@ async def me(user: User = Depends(get_current_user)):
     return user
 
 
-@router.get("token_curr_user")
+@router.get("/token_curr_user")
 async def token_curr_user(token: str = Depends(get_token)):
     return {"token": token}

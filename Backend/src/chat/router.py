@@ -1,4 +1,3 @@
-# app/chat/router.py
 import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +16,7 @@ from src.chat.schemas import (
     WSResponse
 )
 from src.chat.manager import manager
-from src.auth.dependencies import get_current_user
+from src.auth.dependencise import get_current_user
 
 from src.listings.models import Listing
 
@@ -87,7 +86,6 @@ async def get_conversation_messages(
     db: AsyncSession = Depends(get_session)
 ):
     """Получить историю сообщений"""
-    # Проверяем доступ
     has_access = await ChatDAO.check_conversation_access(db, conversation_id, user.id)
     if not has_access:
         raise HTTPException(403, "Access denied")
@@ -110,28 +108,35 @@ async def get_unread_count(
 async def websocket_chat(
     websocket: WebSocket,
     conversation_id: int,
+    token: str = Query(...),
     db: AsyncSession = Depends(get_session)
-):    
-    user = await get_current_user()
-    if not user:
-        await websocket.close(code=1008, reason="Invalid or expired token")
+):        
+    try:
+        payload = jwt.decode(
+            token,
+            setting.SECRETE_KEY,
+            setting.ALGORITHM
+        )
+        user_id = int(payload.get("sub"))
+        user = await UserDAO(db).get_one_by_id(user_id)
+        if not user:
+            await websocket.close(code=1008, reason="User not found")
+            return
+    except:
+        await websocket.close(code=1008, reason="Invalid token")
         return
     
-    user_id = user.id
-    
-    has_access = await ChatDAO.check_conversation_access(db, conversation_id, user_id)
+    has_access = await ChatDAO.check_conversation_access(db, conversation_id, user.id)
     if not has_access:
         await websocket.close(code=1008, reason="Access denied")
         return
 
-    await manager.connect(conversation_id, user_id, websocket)
+    await manager.connect(conversation_id, user.id, websocket)
     
     try:
         while True:
-            # Получаем сообщение от клиента
             raw_data = await websocket.receive_text()
             
-            # Парсим JSON
             try:
                 data = WSMessage.parse_raw(raw_data)
             except Exception as e:
@@ -153,7 +158,6 @@ async def websocket_chat(
                     ).json()
                 )
             elif data.action == "send":
-                # Валидация
                 if not data.text or len(data.text) > 10000:
                     await websocket.send_text(
                         WSResponse(
@@ -167,7 +171,7 @@ async def websocket_chat(
                 new_message = await ChatDAO.save_message(
                     db,
                     conversation_id=conversation_id,
-                    sender_id=user_id,
+                    sender_id=user.id,
                     text=data.text
                 )
 
@@ -193,21 +197,21 @@ async def websocket_chat(
                 response = WSResponse(
                     action="typing_status",
                     conversation_id=conversation_id,
-                    data={"user_id": user_id, "is_typing": True}
+                    data={"user_id": user.id, "is_typing": True}
                 )
                 await manager.broadcast_to_conversation(
                     conversation_id,
                     response.json(),
-                    exclude_user_id=user_id
+                    exclude_user_id=user.id
                 )
             
             elif data.action == "read":
-                await ChatDAO.mark_messages_as_read(db, conversation_id, user_id)
+                await ChatDAO.mark_messages_as_read(db, conversation_id, user.id)
                 
                 response = WSResponse(
                     action="read_receipt",
                     conversation_id=conversation_id,
-                    data={"user_id": user_id}
+                    data={"user_id": user.id}
                 )
                 await manager.broadcast_to_conversation(
                     conversation_id,
@@ -252,9 +256,9 @@ async def websocket_chat(
                 )
     
     except WebSocketDisconnect:
-        manager.disconnect(conversation_id, user_id)
+        manager.disconnect(conversation_id, user.id)
     
     except Exception as e:
         print(f"WebSocket error: {e}")
-        manager.disconnect(conversation_id, user_id)
+        manager.disconnect(conversation_id, user.id)
         raise

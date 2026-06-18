@@ -7,7 +7,7 @@ from src.listings.schemas import FullListing_S, Listing_S, PaginationResponse_S,
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
-from src.auth.dependencies import get_current_user
+from src.auth.dependencise import get_current_user
 
 from src.user.model import User
 
@@ -54,8 +54,8 @@ async def add_listing(
         photos=[],
         infrastructure=data.infrastructure or [],
         investment=investment_dict,
-        latitude=latitude,
-        longitude=longitude
+        latitude=None,
+        longitude=None
     )
     
     return {"id": listing.id, "message": "Объявление создано, теперь загрузите фото"}
